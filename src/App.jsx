@@ -3,15 +3,33 @@ import { Hands } from "@mediapipe/hands";
 import { Camera } from "@mediapipe/camera_utils";
 import "./styles.css";
 
-const TOTAL_ROUNDS = 20;
+const TOTAL_ROUNDS = 50;
 const MIRROR = true;
 
 const GESTURE_TARGETS = [
+  // Open palm
   { type: "GESTURE", display: "🤚", label: "LEFT PALM", gesture: "OPEN_PALM", hand: "Left" },
   { type: "GESTURE", display: "✋", label: "RIGHT PALM", gesture: "OPEN_PALM", hand: "Right" },
-  { type: "GESTURE", display: "✊", label: "FIST", gesture: "FIST" },
-  { type: "GESTURE", display: "✌️", label: "PEACE", gesture: "PEACE" },
-  { type: "GESTURE", display: "👍", label: "THUMBS UP", gesture: "THUMBS_UP" },
+
+  // Fist (left/right)
+  { type: "GESTURE", display: "✊", label: "LEFT FIST", gesture: "FIST", hand: "Left" },
+  { type: "GESTURE", display: "✊", label: "RIGHT FIST", gesture: "FIST", hand: "Right" },
+
+  // Peace (left/right)
+  { type: "GESTURE", display: "✌️", label: "LEFT PEACE", gesture: "PEACE", hand: "Left" },
+  { type: "GESTURE", display: "✌️", label: "RIGHT PEACE", gesture: "PEACE", hand: "Right" },
+
+  // Thumbs up (left/right)
+  { type: "GESTURE", display: "👍", label: "LEFT THUMBS UP", gesture: "THUMBS_UP", hand: "Left" },
+  { type: "GESTURE", display: "👍", label: "RIGHT THUMBS UP", gesture: "THUMBS_UP", hand: "Right" },
+
+  // Rock sign (single hand - any hand)
+  { type: "GESTURE", display: "🤘", label: "ROCK ON", gesture: "ROCKER" },
+
+  // Both hands
+  { type: "GESTURE", display: "🤘🤘", label: "BOTH HAND ROCK ON", gesture: "ROCKER", bothHands: true },
+  { type: "GESTURE", display: "✊✊", label: "BOTH HAND FIST", gesture: "FIST", bothHands: true },
+  { type: "GESTURE", display: "✌️✌️", label: "BOTH HAND PEACE", gesture: "PEACE", bothHands: true },
 ];
 
 const EXCLUDED_KEYS = ["Meta", "Control", "Alt", "Shift", "Escape", "CapsLock", "Tab"];
@@ -58,7 +76,7 @@ function formatMs(ms) {
 
 export default function App() {
   const videoRef = useRef(null);
-  const canvasRef = useRef(null);          // ✅ FIX: declare this
+  const canvasRef = useRef(null);
   const cameraRef = useRef(null);
 
   const [ready, setReady] = useState(false);
@@ -80,10 +98,9 @@ export default function App() {
   useEffect(() => void (roundRef.current = round), [round]);
   useEffect(() => void (finishedRef.current = finished), [finished]);
 
-  // Gesture smoothing
-  const lastRawGestureRef = useRef(null);
-  const stableGestureRef = useRef(null);
-  const stableCountRef = useRef(0);
+  // Stable-frame gate (works for single-hand + both-hands)
+  const matchStableCountRef = useRef(0);
+  const STABLE_FRAMES = 3;
 
   const getElapsedMs = () => {
     if (!startedRef.current) return 0;
@@ -91,15 +108,15 @@ export default function App() {
   };
 
   const randomizeMousePos = () => {
-    const x = 10 + Math.random() * 80;
-    const y = 15 + Math.random() * 70;
+    // avoid bottom-right camera preview zone
+    const x = 10 + Math.random() * 60;
+    const y = 15 + Math.random() * 55;
     setMousePos({ x, y });
   };
 
   const completeRound = () => {
     if (finishedRef.current) return;
 
-    // start timer on first correct
     if (!startedRef.current) {
       startedRef.current = true;
       startAtRef.current = performance.now();
@@ -115,6 +132,9 @@ export default function App() {
     const next = pickNextTarget();
     setTarget(next);
     if (next.type === "MOUSE") randomizeMousePos();
+
+    // reset stability gate when new target appears
+    matchStableCountRef.current = 0;
   };
 
   const onMouseTargetClick = (e) => {
@@ -128,9 +148,7 @@ export default function App() {
   useEffect(() => {
     let raf = 0;
     const tick = () => {
-      if (!finishedRef.current && startedRef.current) {
-        setTimeText(formatMs(getElapsedMs()));
-      }
+      if (!finishedRef.current && startedRef.current) setTimeText(formatMs(getElapsedMs()));
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -166,7 +184,7 @@ export default function App() {
     });
 
     hands.setOptions({
-      maxNumHands: 1,
+      maxNumHands: 2,
       modelComplexity: 0,
       minDetectionConfidence: 0.6,
       minTrackingConfidence: 0.6,
@@ -175,7 +193,7 @@ export default function App() {
     hands.onResults((results) => {
       if (finishedRef.current) return;
 
-      // ✅ draw camera frame into your bottom-right canvas
+      // draw camera frame into canvas
       const canvas = canvasRef.current;
       if (canvas && results.image) {
         const ctx = canvas.getContext("2d");
@@ -186,32 +204,45 @@ export default function App() {
         ctx.drawImage(results.image, 0, 0, w, h);
       }
 
-      const lm = results?.multiHandLandmarks?.[0] || null;
-      const handed = results?.multiHandedness?.[0]?.label || null;
-
-      const raw = classifyGesture(lm) ?? null;
-
-      if (raw === lastRawGestureRef.current) stableCountRef.current += 1;
-      else {
-        lastRawGestureRef.current = raw;
-        stableCountRef.current = 1;
-      }
-
-      const STABLE_FRAMES = 3;
-      if (stableCountRef.current >= STABLE_FRAMES) stableGestureRef.current = raw;
-
-      const stable = stableGestureRef.current;
-      if (!stable) return;
-
-      const seenHand = handed && MIRROR ? (handed === "Left" ? "Right" : "Left") : handed;
-
       const t = targetRef.current;
       if (!t || t.type !== "GESTURE") return;
 
-      const gestureOk = stable === t.gesture;
-      const handOk = t.hand ? seenHand === t.hand : true;
+      const landmarks = results?.multiHandLandmarks || [];
+      const handedness = results?.multiHandedness || [];
 
-      if (gestureOk && handOk) completeRound();
+      // Build per-hand info
+      const handsSeen = landmarks.map((lm, i) => {
+        const rawHand = handedness?.[i]?.label || null; // "Left" / "Right"
+        const seenHand = rawHand && MIRROR ? (rawHand === "Left" ? "Right" : "Left") : rawHand;
+        const gesture = classifyGesture(lm);
+        return { seenHand, gesture };
+      });
+
+      // Evaluate match
+      let matched = false;
+
+      if (t.bothHands) {
+        // Need TWO hands doing the same gesture
+        const valid = handsSeen.filter((h) => h.gesture);
+        matched = valid.length === 2 && valid.every((h) => h.gesture === t.gesture);
+      } else {
+        // Single hand: (optionally) must be specific hand
+        matched = handsSeen.some((h) => {
+          if (!h.gesture) return false;
+          if (h.gesture !== t.gesture) return false;
+          if (t.hand) return h.seenHand === t.hand;
+          return true;
+        });
+      }
+
+      // Stability gate (3 frames)
+      if (matched) matchStableCountRef.current += 1;
+      else matchStableCountRef.current = 0;
+
+      if (matchStableCountRef.current >= STABLE_FRAMES) {
+        matchStableCountRef.current = 0;
+        completeRound();
+      }
     });
 
     cameraRef.current = new Camera(videoRef.current, {
@@ -226,8 +257,12 @@ export default function App() {
     setReady(true);
 
     return () => {
-      try { cameraRef.current?.stop(); } catch {}
-      try { hands.close(); } catch {}
+      try {
+        cameraRef.current?.stop();
+      } catch {}
+      try {
+        hands.close();
+      } catch {}
     };
   }, []);
 
@@ -242,9 +277,7 @@ export default function App() {
     setTimeText("0:00.000");
     startedRef.current = false;
 
-    lastRawGestureRef.current = null;
-    stableGestureRef.current = null;
-    stableCountRef.current = 0;
+    matchStableCountRef.current = 0;
   };
 
   return (
@@ -257,7 +290,7 @@ export default function App() {
         <button className="hudBtn" onClick={reset}>Reset</button>
       </div>
 
-      {/* ✅ input only (hidden) */}
+      {/* input only (hidden) */}
       <video ref={videoRef} className="hiddenVideo" autoPlay playsInline muted />
 
       <div className="centerWrap">
@@ -278,7 +311,7 @@ export default function App() {
         )}
       </div>
 
-      {/* ✅ this now shows the camera because we draw into it */}
+      {/* camera preview */}
       <canvas ref={canvasRef} className="cameraPreview" />
     </div>
   );
@@ -310,6 +343,9 @@ function classifyGesture(lm) {
   if (indexExt && middleExt && !ringExt && !pinkyExt) return "PEACE";
   if (thumbUp && thumbAboveWrist && indexCurl && middleCurl && ringCurl && pinkyCurl) return "THUMBS_UP";
   if (extendedCount === 0 && !thumbUp) return "FIST";
+
+  // 🤘 Rocker: index + pinky extended, middle + ring curled
+  if (indexExt && !middleExt && !ringExt && pinkyExt && middleCurl && ringCurl) return "ROCKER";
 
   return null;
 }

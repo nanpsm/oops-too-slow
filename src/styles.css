@@ -126,6 +126,7 @@ button.ghost { background: transparent; }
   border-radius:999px;
   transform: translate(-50%, -50%);
   cursor: crosshair;
+  z-index: 10;
 
   border: 3px solid rgba(255,255,255,0.9);
   background: rgba(255,255,255,0.15);
@@ -159,7 +160,7 @@ button.ghost { background: transparent; }
   border: 1px solid rgba(255,255,255,0.18);
   background: black;
 
-  z-index: 5;
+  z-index: 50;
   box-shadow: 0 10px 30px rgba(0,0,0,0.45);
 
   transform: scaleX(-1);
