@@ -1,0 +1,167 @@
+:root { font-family: ui-sans-serif, system-ui, Arial; }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: #0b0b10; color: #fff; }
+
+.page { min-height: 100vh; display: flex; flex-direction: column; }
+.topbar {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,0.12);
+}
+.brand { font-weight: 700; letter-spacing: 0.2px; }
+.score { opacity: 0.95; }
+
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  padding: 16px;
+  flex: 1;
+}
+@media (max-width: 900px) {
+  .layout { grid-template-columns: 1fr; }
+}
+
+.card {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 12px 30px rgba(0,0,0,0.35);
+}
+
+.big { text-align: center; }
+.targetTitle { opacity: 0.9; margin-top: 6px; }
+.emoji { font-size: 84px; margin: 12px 0; }
+.targetLabel { font-size: 18px; opacity: 0.95; }
+
+.status { margin-top: 12px; display: flex; gap: 10px; justify-content: center; align-items: center; }
+.pill {
+  background: rgba(0,255,140,0.18);
+  border: 1px solid rgba(0,255,140,0.35);
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+}
+
+.actions { margin-top: 14px; display: flex; gap: 10px; justify-content: center; }
+button {
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.10);
+  color: white;
+  padding: 10px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+button:hover { background: rgba(255,255,255,0.14); }
+button.ghost { background: transparent; }
+
+.hint { margin-top: 14px; font-size: 13px; opacity: 0.75; }
+
+.camTitle { margin-bottom: 10px; opacity: 0.9; }
+.video { display: none; } /* we show canvas instead */
+.canvas {
+  width: 100%;
+  max-width: 720px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+}
+.mini { margin-top: 10px; font-size: 13px; opacity: 0.75; }
+
+.footer {
+  text-align: center;
+  padding: 14px;
+  border-top: 1px solid rgba(255,255,255,0.12);
+  opacity: 0.8;
+  font-size: 13px;
+}
+
+.minScreen {
+  width: 100vw;
+  height: 100vh;
+  background: #0b0b10;
+  color: white;
+  display: flex;
+  flex-direction: column;
+}
+.hiddenVideo {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+.hud {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  border-bottom: 1px solid rgba(255,255,255,0.12);
+  font-size: 14px;
+}
+.hudBtn {
+  border: 1px solid rgba(255,255,255,0.18);
+  background: rgba(255,255,255,0.10);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+.center {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  padding: 24px;
+}
+.title { font-size: 14px; opacity: 0.75; letter-spacing: 2px; }
+.big { font-size: clamp(90px, 18vw, 220px); line-height: 1; margin: 10px 0; }
+.subtitle { font-size: 16px; opacity: 0.9; }
+
+/* Aimlab target */
+.mouseTarget{
+  position:absolute;
+  width:60px;
+  height:60px;
+  border-radius:999px;
+  transform: translate(-50%, -50%);
+  cursor: crosshair;
+
+  border: 3px solid rgba(255,255,255,0.9);
+  background: rgba(255,255,255,0.15);
+  box-shadow: 0 0 0 10px rgba(255,255,255,0.06);
+
+  display: inline-block;
+}
+
+/* optional: a dot in the center */
+.mouseTarget::after{
+  content:"";
+  position:absolute;
+  inset:50%;
+  width:10px;
+  height:10px;
+  border-radius:999px;
+  transform: translate(-50%, -50%);
+  background: rgba(255,255,255,0.95);
+}
+
+.cameraPreview {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+
+  width: 30vw;        /* 30% of screen */
+  max-width: 360px;
+  aspect-ratio: 4 / 3;
+
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.18);
+  background: black;
+
+  z-index: 5;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+
+  transform: scaleX(-1);
+}
+
