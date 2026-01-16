@@ -3,7 +3,7 @@ import { Hands } from "@mediapipe/hands";
 import { Camera } from "@mediapipe/camera_utils";
 import "./styles.css";
 
-const TOTAL_ROUNDS = 100;
+const TOTAL_ROUNDS = 20;
 const MIRROR = true;
 
 const GESTURE_TARGETS = [
