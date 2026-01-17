@@ -11,6 +11,11 @@ input, textarea {
 
 body { margin: 0; background: #0b0b10; color: #fff; }
 
+.whiteScreen {
+  background: #fff;
+  color: #000000;
+}
+
 .page { min-height: 100vh; display: flex; flex-direction: column; }
 .topbar {
   display: flex; justify-content: space-between; align-items: center;
@@ -238,10 +243,19 @@ button.ghost { background: transparent; }
 /* -------- NAME SCREEN -------- */
 
 .nameScreen {
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+}
+
+.nameCard{
+  width: min(1000px, 92vw); /* match your rectangle width */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
 }
 
 /* TITLE */
@@ -291,4 +305,61 @@ button.ghost { background: transparent; }
 
 .enterBtn:hover {
   background: rgba(255,255,255,0.22);
+}
+
+.floatRect{
+  width: 100%;
+  height: 200px;
+  margin: 14px auto 18px;
+  background: #fff;
+  position: relative;   /* IMPORTANT */
+  overflow: hidden;     /* IMPORTANT */
+  border-radius: 24px;
+}
+
+.floatItem{
+  position: absolute;
+  bottom: -30px;
+  font-size: 36px;
+  font-weight: 900;
+  color: #000;
+  line-height: 1;
+  pointer-events: none;
+
+  animation: rise 4s ease-out forwards; /* IMPORTANT */
+}
+
+@keyframes rise{
+  0%{ transform: translateY(0); opacity: 0; }
+  10%{ opacity: 1; }
+  100%{ transform: translate(var(--drift), -260px); opacity: 0; }
+}
+
+/* Wrapper to position title relative to rectangle */
+.floatRectWrapper{
+  position: relative;
+  width: 100%;
+}
+
+/* Title inside rectangle */
+.rectTitle{
+  position: absolute;
+  top: 30%;                 /* overlaps rectangle slightly */
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 5;
+
+  padding: 10px 22px;
+  border-radius: 14px;
+
+  background: rgba(255,255,255,0.5); /* 50% transparent */
+  color: #000;
+
+  font-size: 48px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  text-align: center;
+
+  backdrop-filter: blur(5px);
+  white-space: nowrap; 
 }

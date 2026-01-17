@@ -30,35 +30,111 @@ const TOTAL_ROUNDS_DEFAULT = 20;
 const MIRROR = true;
 
 const GESTURE_TARGETS = [
-  { type: "GESTURE", display: "🤚", label: "LEFT PALM", gesture: "OPEN_PALM", hand: "Left" },
-  { type: "GESTURE", display: "✋", label: "RIGHT PALM", gesture: "OPEN_PALM", hand: "Right" },
+  {
+    type: "GESTURE",
+    display: "🤚",
+    label: "LEFT PALM",
+    gesture: "OPEN_PALM",
+    hand: "Left",
+  },
+  {
+    type: "GESTURE",
+    display: "✋",
+    label: "RIGHT PALM",
+    gesture: "OPEN_PALM",
+    hand: "Right",
+  },
 
-  { type: "GESTURE", display: "✊", label: "LEFT FIST", gesture: "FIST", hand: "Left" },
-  { type: "GESTURE", display: "✊", label: "RIGHT FIST", gesture: "FIST", hand: "Right" },
+  {
+    type: "GESTURE",
+    display: "✊",
+    label: "LEFT FIST",
+    gesture: "FIST",
+    hand: "Left",
+  },
+  {
+    type: "GESTURE",
+    display: "✊",
+    label: "RIGHT FIST",
+    gesture: "FIST",
+    hand: "Right",
+  },
 
-  { type: "GESTURE", display: "✌️", label: "LEFT PEACE", gesture: "PEACE", hand: "Left" },
-  { type: "GESTURE", display: "✌️", label: "RIGHT PEACE", gesture: "PEACE", hand: "Right" },
+  {
+    type: "GESTURE",
+    display: "✌️",
+    label: "LEFT PEACE",
+    gesture: "PEACE",
+    hand: "Left",
+  },
+  {
+    type: "GESTURE",
+    display: "✌️",
+    label: "RIGHT PEACE",
+    gesture: "PEACE",
+    hand: "Right",
+  },
 
-  { type: "GESTURE", display: "👍", label: "LEFT THUMBS UP", gesture: "THUMBS_UP", hand: "Left" },
-  { type: "GESTURE", display: "👍", label: "RIGHT THUMBS UP", gesture: "THUMBS_UP", hand: "Right" },
+  {
+    type: "GESTURE",
+    display: "👍",
+    label: "LEFT THUMBS UP",
+    gesture: "THUMBS_UP",
+    hand: "Left",
+  },
+  {
+    type: "GESTURE",
+    display: "👍",
+    label: "RIGHT THUMBS UP",
+    gesture: "THUMBS_UP",
+    hand: "Right",
+  },
 
   { type: "GESTURE", display: "🤘", label: "ROCK ON", gesture: "ROCKER" },
 
-  { type: "GESTURE", display: "🤘🤘", label: "BOTH HAND ROCK ON", gesture: "ROCKER", bothHands: true },
-  { type: "GESTURE", display: "✊✊", label: "BOTH HAND FIST", gesture: "FIST", bothHands: true },
-  { type: "GESTURE", display: "✌️✌️", label: "BOTH HAND PEACE", gesture: "PEACE", bothHands: true },
+  {
+    type: "GESTURE",
+    display: "🤘🤘",
+    label: "BOTH HAND ROCK ON",
+    gesture: "ROCKER",
+    bothHands: true,
+  },
+  {
+    type: "GESTURE",
+    display: "✊✊",
+    label: "BOTH HAND FIST",
+    gesture: "FIST",
+    bothHands: true,
+  },
+  {
+    type: "GESTURE",
+    display: "✌️✌️",
+    label: "BOTH HAND PEACE",
+    gesture: "PEACE",
+    bothHands: true,
+  },
 ];
 
 const BOTH_HAND_GESTURE_TARGETS = GESTURE_TARGETS.filter(
   (g) => g.type === "GESTURE" && g.bothHands,
 );
 
-const EXCLUDED_KEYS = ["Meta", "Control", "Alt", "Shift", "Escape", "CapsLock", "Tab"];
+const EXCLUDED_KEYS = [
+  "Meta",
+  "Control",
+  "Alt",
+  "Shift",
+  "Escape",
+  "CapsLock",
+  "Tab",
+];
 function isAllowedKey(key) {
   if (EXCLUDED_KEYS.includes(key)) return false;
   if (typeof key === "string" && key.startsWith("F")) return false;
   return true;
 }
+
+const FLOATING = ["✌️", "🤘", "👍", "O", "P", "S", "T", "L", "W"];
 
 function formatMs(ms) {
   const total = Math.max(0, Math.round(ms));
@@ -73,7 +149,7 @@ function formatMs(ms) {
 function mulberry32(seed) {
   let t = seed >>> 0;
   return function () {
-    t += 0x6D2B79F5;
+    t += 0x6d2b79f5;
     let x = Math.imul(t ^ (t >>> 15), 1 | t);
     x ^= x + Math.imul(x ^ (x >>> 7), 61 | x);
     return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
@@ -130,11 +206,15 @@ async function signInWithName(name) {
 function makeRoomCode(len = 6) {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
   let out = "";
-  for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < len; i++)
+    out += chars[Math.floor(Math.random() * chars.length)];
   return out;
 }
 
-async function createRoom(roundCount = TOTAL_ROUNDS_DEFAULT, playerName = "Host") {
+async function createRoom(
+  roundCount = TOTAL_ROUNDS_DEFAULT,
+  playerName = "Host",
+) {
   const user = auth.currentUser;
   if (!user) throw new Error("Not signed in");
 
@@ -176,7 +256,6 @@ async function createRoom(roundCount = TOTAL_ROUNDS_DEFAULT, playerName = "Host"
   }
   throw new Error("Failed to create room. Try again.");
 }
-
 
 async function joinRoom(code, playerName = "Player") {
   const user = auth.currentUser;
@@ -257,14 +336,14 @@ function listenRoom(code, cb) {
 // -------------------- APP --------------------
 export default function App() {
   useEffect(() => {
-  setPersistence(auth, inMemoryPersistence).catch(console.error);
+    setPersistence(auth, inMemoryPersistence).catch(console.error);
   }, []);
 
   const [screen, setScreen] = useState("name");
   const [name, setName] = useState("");
   const [authUser, setAuthUser] = useState(null);
 
-  const [mode, setMode] = useState(null); 
+  const [mode, setMode] = useState(null);
   const [roomCode, setRoomCode] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [roomData, setRoomData] = useState(null);
@@ -286,7 +365,9 @@ export default function App() {
 
   const [ready, setReady] = useState(false);
   const [round, setRound] = useState(1);
-  const [target, setTarget] = useState(() => pickTargetForRound({ seed: 123, roundIndex: 1 })); // will reset properly
+  const [target, setTarget] = useState(() =>
+    pickTargetForRound({ seed: 123, roundIndex: 1 }),
+  ); // will reset properly
   const [finished, setFinished] = useState(false);
 
   const [mousePos, setMousePos] = useState({ x: 50, y: 50 });
@@ -298,6 +379,31 @@ export default function App() {
   const lastRoomStatusRef = useRef(null);
   const startedAtRef = useRef(null); // prevents reset on every update
   const [timeText, setTimeText] = useState("0:00.000");
+
+  const [floatItems, setFloatItems] = useState([]);
+
+  useEffect(() => {
+    if (screen !== "name") return;
+
+    let id = 0;
+
+    const interval = setInterval(() => {
+      const char = FLOATING[Math.floor(Math.random() * FLOATING.length)];
+
+      setFloatItems((prev) => [
+        ...prev,
+        {
+          id: id++,
+          char,
+          left: Math.random() * 90 + 5,
+          dur: 3500 + Math.random() * 2500,
+          drift: Math.random() * 60 - 30,
+        },
+      ]);
+    }, 400);
+
+    return () => clearInterval(interval);
+  }, [screen]);
 
   // Avoid stale state inside handlers
   const targetRef = useRef(target);
@@ -427,7 +533,8 @@ export default function App() {
   useEffect(() => {
     let raf = 0;
     const tick = () => {
-      if (!finishedRef.current && startedRef.current) setTimeText(formatMs(getDisplayedMs()));
+      if (!finishedRef.current && startedRef.current)
+        setTimeText(formatMs(getDisplayedMs()));
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -460,7 +567,8 @@ export default function App() {
     if (!videoRef.current) return;
 
     const hands = new Hands({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+      locateFile: (file) =>
+        `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
     });
 
     hands.setOptions({
@@ -494,7 +602,8 @@ export default function App() {
 
       const handsSeen = landmarks.map((lm, i) => {
         const rawHand = handedness?.[i]?.label || null;
-        const seenHand = rawHand && MIRROR ? (rawHand === "Left" ? "Right" : "Left") : rawHand;
+        const seenHand =
+          rawHand && MIRROR ? (rawHand === "Left" ? "Right" : "Left") : rawHand;
         const gesture = classifyGesture(lm);
         return { seenHand, gesture };
       });
@@ -503,7 +612,8 @@ export default function App() {
 
       if (t.bothHands) {
         const valid = handsSeen.filter((h) => h.gesture);
-        matched = valid.length === 2 && valid.every((h) => h.gesture === t.gesture);
+        matched =
+          valid.length === 2 && valid.every((h) => h.gesture === t.gesture);
       } else {
         matched = handsSeen.some((h) => {
           if (!h.gesture) return false;
@@ -534,8 +644,12 @@ export default function App() {
     setReady(true);
 
     return () => {
-      try { cameraRef.current?.stop(); } catch {}
-      try { hands.close(); } catch {}
+      try {
+        cameraRef.current?.stop();
+      } catch {}
+      try {
+        hands.close();
+      } catch {}
     };
   }, [screen]);
 
@@ -562,10 +676,12 @@ export default function App() {
         setRoundSeed(data.roundSeed);
         setTotalRounds(data.roundCount || TOTAL_ROUNDS_DEFAULT);
 
-        resetGame({ seed: data.roundSeed, rounds: data.roundCount || TOTAL_ROUNDS_DEFAULT });
+        resetGame({
+          seed: data.roundSeed,
+          rounds: data.roundCount || TOTAL_ROUNDS_DEFAULT,
+        });
         setScreen("game");
       }
-
     });
   }
 
@@ -607,16 +723,21 @@ export default function App() {
     frame();
   }, [screen]);
 
-
   // Reset game function
   function resetGame({ seed = null, rounds = TOTAL_ROUNDS_DEFAULT } = {}) {
     setFinished(false);
     setTotalRounds(rounds);
     setRound(1);
 
-    const next = seed != null ? pickTargetForRound({ seed, roundIndex: 1 }) : getNextTarget(1);
+    const next =
+      seed != null
+        ? pickTargetForRound({ seed, roundIndex: 1 })
+        : getNextTarget(1);
     setTarget(next);
-    if (next.type === "MOUSE") setMousePos(seed != null ? getMousePosForTarget(1) : getMousePosForTarget(1));
+    if (next.type === "MOUSE")
+      setMousePos(
+        seed != null ? getMousePosForTarget(1) : getMousePosForTarget(1),
+      );
 
     setTimeText("0:00.000");
     startedRef.current = false;
@@ -706,7 +827,6 @@ export default function App() {
     }
   }
 
-
   function buildLeaderboard() {
     const results = roomData?.results || {};
     const players = roomData?.players || {};
@@ -721,9 +841,30 @@ export default function App() {
 
   if (screen === "name") {
     return (
-      <div className="minScreen nameScreen">
+      <div className="minScreen nameScreen whiteScreen">
         <div className="nameCard">
-          <h1 className="title">Oops Too Slow</h1>
+          <div className="floatRectWrapper">
+            <div className="rectTitle">OOPS! TOO SLOW</div>
+
+            <div className="floatRect">
+              {floatItems.map((e) => (
+                <span
+                  key={e.id}
+                  className="floatItem"
+                  style={{
+                    left: `${e.left}%`,
+                    animationDuration: `${e.dur}ms`,
+                    "--drift": `${e.drift}px`,
+                  }}
+                  onAnimationEnd={() =>
+                    setFloatItems((prev) => prev.filter((x) => x.id !== e.id))
+                  }
+                >
+                  {e.char}
+                </span>
+              ))}
+            </div>
+          </div>
 
           <div className="nameRow">
             <input
@@ -731,29 +872,33 @@ export default function App() {
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                handleNameContinue();
-              }
-            }}
+                if (e.key === "Enter") {
+                  handleNameContinue();
+                }
+              }}
               placeholder="Enter Your Nickname"
             />
             <button className="enterBtn" onClick={handleNameContinue}>
               Enter
             </button>
-            </div>
           </div>
+        </div>
       </div>
     );
   }
 
   if (screen === "mode") {
     return (
-      <div className="minScreen" style={{ padding: 18, position: "relative" }}>
+      <div className="minScreen whiteScreen" style={{ padding: 18, position: "relative" }}>
         <h2>Hi, {name || "Player"} 👋</h2>
         <p>Choose a mode:</p>
         <div style={{ display: "flex", gap: 10 }}>
-          <button className="hudBtn" onClick={goSolo}>Solo Mode</button>
-          <button className="hudBtn" onClick={goTeam}>Team Mode</button>
+          <button className="hudBtn" onClick={goSolo}>
+            Solo Mode
+          </button>
+          <button className="hudBtn" onClick={goTeam}>
+            Team Mode
+          </button>
         </div>
         <button
           onClick={() => setShowSettings((v) => !v)}
@@ -784,59 +929,74 @@ export default function App() {
               width: 220,
             }}
           >
-          <div style={{ marginBottom: 10, fontWeight: 700, fontSize: 18 }}>
-            Game Rounds
-          </div>
+            <div style={{ marginBottom: 10, fontWeight: 700, fontSize: 18 }}>
+              Game Rounds
+            </div>
 
-          <input
-            type="range"
-            min={10}
-            max={50}
-            step={10}
-            value={roundsChoice}
-            onChange={(e) => setRoundsChoice(Number(e.target.value))}
-            style={{ width: "100%" }}
-          />
+            <input
+              type="range"
+              min={10}
+              max={50}
+              step={10}
+              value={roundsChoice}
+              onChange={(e) => setRoundsChoice(Number(e.target.value))}
+              style={{ width: "100%" }}
+            />
 
-          <div style={{ marginTop: 10 }}>
-            <b>{roundsChoice}</b> Rounds
+            <div style={{ marginTop: 10 }}>
+              <b>{roundsChoice}</b> Rounds
+            </div>
           </div>
-      </div>
-    )}
+        )}
       </div>
     );
   }
 
   if (screen === "teamChoice") {
     return (
-      <div className="minScreen" style={{ padding: 18 }}>
+      <div className="minScreen whiteScreen" style={{ padding: 18 }}>
         <h2>Team Mode</h2>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button className="hudBtn" onClick={handleHostCreate}>Host Game</button>
-          <button className="hudBtn" onClick={() => setScreen("join")}>Join Party</button>
-          <button className="hudBtn" onClick={handleBackHome}>Back</button>
+          <button className="hudBtn" onClick={handleHostCreate}>
+            Host Game
+          </button>
+          <button className="hudBtn" onClick={() => setScreen("join")}>
+            Join Party
+          </button>
+          <button className="hudBtn" onClick={handleBackHome}>
+            Back
+          </button>
         </div>
         <p style={{ marginTop: 12, opacity: 0.8 }}>
           Party limit: <b>5 players</b>
         </p>
       </div>
-    )
+    );
   }
 
   if (screen === "join") {
     return (
-      <div className="minScreen" style={{ padding: 18 }}>
+      <div className="minScreen whiteScreen" style={{ padding: 18 }}>
         <h2>Join Party</h2>
         <input
           value={joinCode}
           onChange={(e) => setJoinCode(e.target.value)}
           placeholder="Room code (e.g. AB12CD)"
-          style={{ padding: 10, fontSize: 16, width: 260, textTransform: "uppercase" }}
+          style={{
+            padding: 10,
+            fontSize: 16,
+            width: 260,
+            textTransform: "uppercase",
+          }}
         />
         <div style={{ height: 10 }} />
         <div style={{ display: "flex", gap: 10 }}>
-          <button className="hudBtn" onClick={handleJoin}>Join</button>
-          <button className="hudBtn" onClick={() => setScreen("teamChoice")}>Back</button>
+          <button className="hudBtn" onClick={handleJoin}>
+            Join
+          </button>
+          <button className="hudBtn" onClick={() => setScreen("teamChoice")}>
+            Back
+          </button>
         </div>
       </div>
     );
@@ -844,10 +1004,11 @@ export default function App() {
 
   if (screen === "lobby") {
     const players = roomData?.players ? Object.values(roomData.players) : [];
-    const isHost = roomData?.hostUid && auth.currentUser?.uid === roomData.hostUid;
+    const isHost =
+      roomData?.hostUid && auth.currentUser?.uid === roomData.hostUid;
 
     return (
-      <div className="minScreen" style={{ padding: 18 }}>
+      <div className="minScreen whiteScreen" style={{ padding: 18 }}>
         <h2>Waiting Room</h2>
         <div style={{ marginBottom: 8 }}>
           Room Code: <b style={{ letterSpacing: 2 }}>{roomCode}</b>
@@ -857,11 +1018,16 @@ export default function App() {
         </div>
         <ul>
           {players.map((p, i) => (
-            <li key={i}>{p.name}{p.finished ? " ✅" : ""}</li>
+            <li key={i}>
+              {p.name}
+              {p.finished ? " ✅" : ""}
+            </li>
           ))}
         </ul>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+        <div
+          style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}
+        >
           {isHost ? (
             <button className="hudBtn" onClick={handleHostStart}>
               Start Game
@@ -869,116 +1035,124 @@ export default function App() {
           ) : (
             <div style={{ opacity: 0.8 }}>Waiting for host to start…</div>
           )}
-          <button className="hudBtn" onClick={handleBackHome}>Leave</button>
+          <button className="hudBtn" onClick={handleBackHome}>
+            Leave
+          </button>
         </div>
       </div>
     );
   }
 
   if (screen === "results") {
-  const isTeam = mode === "team" && roomData;
-  const rows = isTeam ? buildLeaderboard() : [];
-  const winner = rows.length > 0 ? rows[0] : null;
+    const isTeam = mode === "team" && roomData;
+    const rows = isTeam ? buildLeaderboard() : [];
+    const winner = rows.length > 0 ? rows[0] : null;
 
-  const myUid = auth.currentUser?.uid;
-  const myRow = rows.find((r) => r.uid === myUid);
+    const myUid = auth.currentUser?.uid;
+    const myRow = rows.find((r) => r.uid === myUid);
 
-  const myTimeText =
-    mode === "solo"
-      ? timeText
-      : myRow?.ms != null
-      ? formatMs(myRow.ms)
-      : timeText;
+    const myTimeText =
+      mode === "solo"
+        ? timeText
+        : myRow?.ms != null
+          ? formatMs(myRow.ms)
+          : timeText;
 
-  return (
-    <div className="minScreen" style={{ padding: 24 }}>
-      {/* ===== WINNER (big center) ===== */}
-      {isTeam && winner && (
-        <div style={{ textAlign: "center", marginBottom: 24 }}>
-          <div style={{ fontSize: 40, fontWeight: 900, marginTop: 6 }}>
-            🏆 Winner is {winner.name}
-          </div>
-          <div style={{ fontSize: 18, marginTop: 6 }}>
-            {winner.name}'s Record: {formatMs(winner.ms)}
-          </div>
-        </div>
-      )}
-
-      {/* ===== LEADERBOARD ===== */}
-      {isTeam && (
-        <div style={{ maxWidth: 520, margin: "0 auto 28px" }}>
-          <div style={{ fontWeight: 800, marginBottom: 10 }}>Ranking</div>
-          {rows.length === 0 ? (
-            <div style={{ opacity: 0.8 }}>No results yet…</div>
-          ) : (
-            <ol style={{ paddingLeft: 22 }}>
-              {rows.map((r, i) => (
-                <li
-                  key={r.uid}
-                  style={{
-                    marginBottom: 8,
-                    fontWeight: r.uid === myUid ? 800 : 400,
-                  }}
-                >
-                  {r.name} — {formatMs(r.ms)}
-                </li>
-              ))}
-            </ol>
-          )}
-        </div>
-      )}
-
-      {/* ===== YOUR RECORD ===== */}
-      <div style={{ maxWidth: 520, margin: "0 auto" }}>
-        <div style={{ fontWeight: 800, marginBottom: 10 }}>Your record - {myTimeText}</div>
-
-        {/* selfie + download (your existing working block) */}
-        {selfieUrl && (
-          <div style={{ marginTop: 12 }}>
-            <img
-              src={selfieUrl}
-              alt="Selfie"
-              style={{
-                width: 260,
-                borderRadius: 12,
-                border: "1px solid rgba(255,255,255,0.15)",
-                display: "block",
-                marginBottom: 10,
-              }}
-            />
-            <a
-              className="hudBtn"
-              href={selfieUrl}
-              download={`oops-too-slow-selfie.png`}
-              style={{ display: "inline-block" }}
-            >
-              Save Image
-            </a>
+    return (
+      <div className="minScreen" style={{ padding: 24 }}>
+        {/* ===== WINNER (big center) ===== */}
+        {isTeam && winner && (
+          <div style={{ textAlign: "center", marginBottom: 24 }}>
+            <div style={{ fontSize: 40, fontWeight: 900, marginTop: 6 }}>
+              🏆 Winner is {winner.name}
+            </div>
+            <div style={{ fontSize: 18, marginTop: 6 }}>
+              {winner.name}'s Record: {formatMs(winner.ms)}
+            </div>
           </div>
         )}
 
+        {/* ===== LEADERBOARD ===== */}
+        {isTeam && (
+          <div style={{ maxWidth: 520, margin: "0 auto 28px" }}>
+            <div style={{ fontWeight: 800, marginBottom: 10 }}>Ranking</div>
+            {rows.length === 0 ? (
+              <div style={{ opacity: 0.8 }}>No results yet…</div>
+            ) : (
+              <ol style={{ paddingLeft: 22 }}>
+                {rows.map((r, i) => (
+                  <li
+                    key={r.uid}
+                    style={{
+                      marginBottom: 8,
+                      fontWeight: r.uid === myUid ? 800 : 400,
+                    }}
+                  >
+                    {r.name} — {formatMs(r.ms)}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+        )}
 
-        {/* buttons */}
-        <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
-          {mode === "team" && (
-            <button className="hudBtn" onClick={() => setScreen("lobby")}>
-              Back to Lobby
-            </button>
+        {/* ===== YOUR RECORD ===== */}
+        <div style={{ maxWidth: 520, margin: "0 auto" }}>
+          <div style={{ fontWeight: 800, marginBottom: 10 }}>
+            Your record - {myTimeText}
+          </div>
+
+          {/* selfie + download (your existing working block) */}
+          {selfieUrl && (
+            <div style={{ marginTop: 12 }}>
+              <img
+                src={selfieUrl}
+                alt="Selfie"
+                style={{
+                  width: 260,
+                  borderRadius: 12,
+                  border: "1px solid rgba(255,255,255,0.15)",
+                  display: "block",
+                  marginBottom: 10,
+                }}
+              />
+              <a
+                className="hudBtn"
+                href={selfieUrl}
+                download={`oops-too-slow-selfie.png`}
+                style={{ display: "inline-block" }}
+              >
+                Save Image
+              </a>
+            </div>
           )}
-          <button className="hudBtn" onClick={handleBackHome}>
-            Home
-          </button>
+
+          {/* buttons */}
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              marginTop: 16,
+              flexWrap: "wrap",
+            }}
+          >
+            {mode === "team" && (
+              <button className="hudBtn" onClick={() => setScreen("lobby")}>
+                Back to Lobby
+              </button>
+            )}
+            <button className="hudBtn" onClick={handleBackHome}>
+              Home
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  );
-}
-
+    );
+  }
 
   // -------------- GAME SCREEN (your original UI, slightly adjusted) --------------
   // Note: in TEAM mode, seed/roundCount is controlled by host start.
   const TOTAL_ROUNDS = totalRounds;
-
 
   return (
     <div className="minScreen">
@@ -990,21 +1164,29 @@ export default function App() {
           </b>
         </div>
 
-          <div className="hudCenter">
-            {mode === "team" ? (
-              <>
-                ROOM: <b>{roomCode}</b> | TIME: <b>{timeText}</b>
-              </>
-            ) : (
-              <b>{timeText}</b>
-            )}
-          </div>
+        <div className="hudCenter">
+          {mode === "team" ? (
+            <>
+              ROOM: <b>{roomCode}</b> | TIME: <b>{timeText}</b>
+            </>
+          ) : (
+            <b>{timeText}</b>
+          )}
+        </div>
 
-        <button className="hudBtn" onClick={handleBackHome}>Home</button>
+        <button className="hudBtn" onClick={handleBackHome}>
+          Home
+        </button>
       </div>
 
       {/* input only (hidden) */}
-      <video ref={videoRef} className="hiddenVideo" autoPlay playsInline muted />
+      <video
+        ref={videoRef}
+        className="hiddenVideo"
+        autoPlay
+        playsInline
+        muted
+      />
 
       <div className="centerWrap">
         {(target.type === "KEY" || target.type === "GESTURE") && (
@@ -1034,7 +1216,8 @@ export default function App() {
 function classifyGesture(lm) {
   if (!lm) return null;
 
-  const fingerExtended = (mcp, pip, tip) => lm[tip].y < lm[pip].y && lm[pip].y < lm[mcp].y;
+  const fingerExtended = (mcp, pip, tip) =>
+    lm[tip].y < lm[pip].y && lm[pip].y < lm[mcp].y;
   const fingerCurled = (pip, tip) => lm[tip].y > lm[pip].y;
 
   const indexExt = fingerExtended(5, 6, 8);
@@ -1047,17 +1230,28 @@ function classifyGesture(lm) {
   const ringCurl = fingerCurled(14, 16);
   const pinkyCurl = fingerCurled(18, 20);
 
-  const extendedCount = [indexExt, middleExt, ringExt, pinkyExt].filter(Boolean).length;
+  const extendedCount = [indexExt, middleExt, ringExt, pinkyExt].filter(
+    Boolean,
+  ).length;
 
   const thumbUp = lm[4].y < lm[3].y && lm[3].y < lm[2].y;
   const thumbAboveWrist = lm[4].y < lm[0].y;
 
   if (extendedCount === 4) return "OPEN_PALM";
   if (indexExt && middleExt && !ringExt && !pinkyExt) return "PEACE";
-  if (thumbUp && thumbAboveWrist && indexCurl && middleCurl && ringCurl && pinkyCurl) return "THUMBS_UP";
+  if (
+    thumbUp &&
+    thumbAboveWrist &&
+    indexCurl &&
+    middleCurl &&
+    ringCurl &&
+    pinkyCurl
+  )
+    return "THUMBS_UP";
   if (extendedCount === 0 && !thumbUp) return "FIST";
 
-  if (indexExt && !middleExt && !ringExt && pinkyExt && middleCurl && ringCurl) return "ROCKER";
+  if (indexExt && !middleExt && !ringExt && pinkyExt && middleCurl && ringCurl)
+    return "ROCKER";
 
   return null;
 }
