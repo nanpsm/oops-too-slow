@@ -573,6 +573,23 @@ export default function App() {
     };
   }, []);
 
+  // Reset game function
+  function resetGame({ seed = null, rounds = TOTAL_ROUNDS_DEFAULT } = {}) {
+    setFinished(false);
+    setTotalRounds(rounds);
+    setRound(1);
+
+    const next = seed != null ? pickTargetForRound({ seed, roundIndex: 1 }) : getNextTarget(1);
+    setTarget(next);
+    if (next.type === "MOUSE") setMousePos(seed != null ? getMousePosForTarget(1) : getMousePosForTarget(1));
+
+    setTimeText("0:00.000");
+    startedRef.current = false;
+    totalMsRef.current = 0;
+    roundStartRef.current = 0;
+    matchStableCountRef.current = 0;
+  }
+
   // ----- UI actions -----
   async function handleNameContinue() {
     try {
