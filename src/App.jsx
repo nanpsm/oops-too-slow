@@ -21,7 +21,8 @@ import {
   serverTimestamp,
 } from "firebase/database";
 import { auth, db } from "./firebase";
-
+import { setPersistence, inMemoryPersistence } from "firebase/auth";
+import { onDisconnect } from "firebase/database";
 
 // --- Game constants ---
 const TOTAL_ROUNDS_DEFAULT = 20;
@@ -113,7 +114,6 @@ async function signInWithName(name) {
   if (!trimmed) throw new Error("Please enter a name");
 
   const cred = await signInAnonymously(auth);
-  await updateProfile(cred.user, { displayName: trimmed });
   return cred.user;
 }
 
@@ -156,6 +156,9 @@ async function createRoom(roundCount = TOTAL_ROUNDS_DEFAULT) {
       },
     });
 
+  onDisconnect(ref(db, `rooms/${code}/players/${uid}`)).remove();
+  onDisconnect(ref(db, `rooms/${code}/results/${uid}`)).remove();
+
     return code;
   }
   throw new Error("Failed to create room. Try again.");
@@ -185,11 +188,14 @@ async function joinRoom(code) {
   if (!tx.committed) throw new Error("Room full (max 5)");
 
   await update(ref(db, `rooms/${code}/players/${user.uid}`), {
-    name: user.displayName || "Player",
+    name: name.trim() || "Player",
     joinedAt: serverTimestamp(),
     finished: false,
     totalTimeMs: null,
   });
+
+  onDisconnect(ref(db, `rooms/${code}/players/${uid}`)).remove();
+  onDisconnect(ref(db, `rooms/${code}/results/${uid}`)).remove();
 
   return true;
 }
@@ -229,6 +235,10 @@ function listenRoom(code, cb) {
 
 // -------------------- APP --------------------
 export default function App() {
+  useEffect(() => {
+  setPersistence(auth, inMemoryPersistence).catch(console.error);
+  }, []);
+
   // Screens: "name" | "mode" | "teamChoice" | "join" | "lobby" | "game" | "results"
   const [screen, setScreen] = useState("name");
   const [name, setName] = useState("");
@@ -281,10 +291,6 @@ export default function App() {
   useEffect(() => {
     const unsub = onAuthStateChanged(auth, (u) => {
       setAuthUser(u);
-      if (u?.displayName) {
-        setName(u.displayName);
-        if (screen === "name") setScreen("mode");
-      }
     });
     return () => unsub();
     // eslint-disable-next-line react-hooks/exhaustive-deps
