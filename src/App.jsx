@@ -3,30 +3,45 @@ import { Hands } from "@mediapipe/hands";
 import { Camera } from "@mediapipe/camera_utils";
 import "./styles.css";
 
-const TOTAL_ROUNDS = 50;
+// --- Firebase (ALL in this file) ---
+import {
+  getAuth,
+  signInAnonymously,
+  updateProfile,
+  onAuthStateChanged,
+} from "firebase/auth";
+import {
+  getDatabase,
+  ref,
+  get,
+  set,
+  update,
+  onValue,
+  runTransaction,
+  serverTimestamp,
+} from "firebase/database";
+import { auth, db } from "./firebase";
+
+
+// --- Game constants ---
+const TOTAL_ROUNDS_DEFAULT = 50;
 const MIRROR = true;
 
 const GESTURE_TARGETS = [
-  // Open palm
   { type: "GESTURE", display: "🤚", label: "LEFT PALM", gesture: "OPEN_PALM", hand: "Left" },
   { type: "GESTURE", display: "✋", label: "RIGHT PALM", gesture: "OPEN_PALM", hand: "Right" },
 
-  // Fist (left/right)
   { type: "GESTURE", display: "✊", label: "LEFT FIST", gesture: "FIST", hand: "Left" },
   { type: "GESTURE", display: "✊", label: "RIGHT FIST", gesture: "FIST", hand: "Right" },
 
-  // Peace (left/right)
   { type: "GESTURE", display: "✌️", label: "LEFT PEACE", gesture: "PEACE", hand: "Left" },
   { type: "GESTURE", display: "✌️", label: "RIGHT PEACE", gesture: "PEACE", hand: "Right" },
 
-  // Thumbs up (left/right)
   { type: "GESTURE", display: "👍", label: "LEFT THUMBS UP", gesture: "THUMBS_UP", hand: "Left" },
   { type: "GESTURE", display: "👍", label: "RIGHT THUMBS UP", gesture: "THUMBS_UP", hand: "Right" },
 
-  // Rock sign (single hand - any hand)
   { type: "GESTURE", display: "🤘", label: "ROCK ON", gesture: "ROCKER" },
 
-  // Both hands
   { type: "GESTURE", display: "🤘🤘", label: "BOTH HAND ROCK ON", gesture: "ROCKER", bothHands: true },
   { type: "GESTURE", display: "✊✊", label: "BOTH HAND FIST", gesture: "FIST", bothHands: true },
   { type: "GESTURE", display: "✌️✌️", label: "BOTH HAND PEACE", gesture: "PEACE", bothHands: true },
@@ -39,32 +54,6 @@ function isAllowedKey(key) {
   return true;
 }
 
-function generateRandomKeyTarget() {
-  const letters = "abcdefghijklmnopqrstuvwxyz";
-  const numbers = "0123456789";
-  const symbols = "`-=[]\\;',./";
-  const all = (letters + numbers + symbols + " ").split("");
-
-  const key = all[Math.floor(Math.random() * all.length)];
-  return {
-    type: "KEY",
-    key,
-    display: key === " " ? "␣" : key.toUpperCase(),
-    label: key === " " ? "SPACE" : "PRESS KEY",
-  };
-}
-
-function generateRandomMouseTarget() {
-  return { type: "MOUSE", display: "🎯", label: "CLICK THE TARGET" };
-}
-
-function pickNextTarget() {
-  const r = Math.random();
-  if (r < 0.34) return GESTURE_TARGETS[Math.floor(Math.random() * GESTURE_TARGETS.length)];
-  if (r < 0.67) return generateRandomKeyTarget();
-  return generateRandomMouseTarget();
-}
-
 function formatMs(ms) {
   const total = Math.max(0, Math.round(ms));
   const sec = Math.floor(total / 1000);
@@ -74,20 +63,204 @@ function formatMs(ms) {
   return `${m}:${String(s).padStart(2, "0")}.${String(msLeft).padStart(3, "0")}`;
 }
 
+// ---------- Deterministic RNG for TEAM mode (same targets for everyone) ----------
+function mulberry32(seed) {
+  let t = seed >>> 0;
+  return function () {
+    t += 0x6D2B79F5;
+    let x = Math.imul(t ^ (t >>> 15), 1 | t);
+    x ^= x + Math.imul(x ^ (x >>> 7), 61 | x);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function generateKeyTargetFromRng(rng) {
+  const letters = "abcdefghijklmnopqrstuvwxyz";
+  const numbers = "0123456789";
+  const symbols = "`-=[]\\;',./";
+  const all = (letters + numbers + symbols + " ").split("");
+  const key = all[Math.floor(rng() * all.length)];
+  return {
+    type: "KEY",
+    key,
+    display: key === " " ? "␣" : key.toUpperCase(),
+    label: key === " " ? "SPACE" : "PRESS KEY",
+  };
+}
+
+function mousePosFromRng(rng) {
+  // avoid bottom-right camera preview zone (same style as yours)
+  const x = 10 + rng() * 60;
+  const y = 15 + rng() * 55;
+  return { x, y };
+}
+
+function pickTargetForRound({ seed, roundIndex }) {
+  // Make result depend on BOTH seed and roundIndex (stable per round)
+  const rng = mulberry32((seed ^ (roundIndex * 2654435761)) >>> 0);
+
+  const r = rng();
+  if (r < 0.34) {
+    return GESTURE_TARGETS[Math.floor(rng() * GESTURE_TARGETS.length)];
+  }
+  if (r < 0.67) return generateKeyTargetFromRng(rng);
+  return { type: "MOUSE", display: "🎯", label: "CLICK THE TARGET" };
+}
+
+// ---------- Firebase helpers (still in same file) ----------
+async function signInWithName(name) {
+  const trimmed = name.trim();
+  if (!trimmed) throw new Error("Please enter a name");
+
+  const cred = await signInAnonymously(auth);
+  await updateProfile(cred.user, { displayName: trimmed });
+  return cred.user;
+}
+
+function makeRoomCode(len = 6) {
+  const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
+  let out = "";
+  for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  return out;
+}
+
+async function createRoom(roundCount = TOTAL_ROUNDS_DEFAULT) {
+  const user = auth.currentUser;
+  if (!user) throw new Error("Not signed in");
+
+  for (let tries = 0; tries < 5; tries++) {
+    const code = makeRoomCode(6);
+    const roomRef = ref(db, `rooms/${code}`);
+
+    const snap = await get(roomRef);
+    if (snap.exists()) continue;
+
+    const roundSeed = Math.floor(Math.random() * 1_000_000_000);
+
+    await set(roomRef, {
+      hostUid: user.uid,
+      status: "lobby",
+      createdAt: serverTimestamp(),
+      maxPlayers: 5,
+      playerCount: 1,
+      roundCount,
+      roundSeed,
+      startedAt: null,
+      players: {
+        [user.uid]: {
+          name: user.displayName || "Host",
+          joinedAt: serverTimestamp(),
+          finished: false,
+          totalTimeMs: null,
+        },
+      },
+    });
+
+    return code;
+  }
+  throw new Error("Failed to create room. Try again.");
+}
+
+async function joinRoom(code) {
+  const user = auth.currentUser;
+  if (!user) throw new Error("Not signed in");
+
+  const roomRef = ref(db, `rooms/${code}`);
+  const roomSnap = await get(roomRef);
+  if (!roomSnap.exists()) throw new Error("Room not found");
+
+  const room = roomSnap.val();
+  if (room.status !== "lobby") throw new Error("Game already started");
+
+  // rejoin without consuming slot
+  if (room.players && room.players[user.uid]) return true;
+
+  // max 5 enforcement
+  const countRef = ref(db, `rooms/${code}/playerCount`);
+  const tx = await runTransaction(countRef, (cur) => {
+    const n = typeof cur === "number" ? cur : 0;
+    if (n >= 5) return; // abort
+    return n + 1;
+  });
+  if (!tx.committed) throw new Error("Room full (max 5)");
+
+  await update(ref(db, `rooms/${code}/players/${user.uid}`), {
+    name: user.displayName || "Player",
+    joinedAt: serverTimestamp(),
+    finished: false,
+    totalTimeMs: null,
+  });
+
+  return true;
+}
+
+async function startGame(code) {
+  const user = auth.currentUser;
+  if (!user) throw new Error("Not signed in");
+
+  const roomRef = ref(db, `rooms/${code}`);
+  const snap = await get(roomRef);
+  if (!snap.exists()) throw new Error("Room not found");
+
+  const room = snap.val();
+  if (room.hostUid !== user.uid) throw new Error("Only host can start");
+  if (room.status !== "lobby") throw new Error("Already started");
+
+  await update(roomRef, { status: "playing", startedAt: serverTimestamp() });
+}
+
+async function submitResult(code, totalTimeMs) {
+  const user = auth.currentUser;
+  if (!user) throw new Error("Not signed in");
+
+  const ms = Math.max(0, Math.floor(totalTimeMs));
+  const updates = {};
+  updates[`rooms/${code}/players/${user.uid}/finished`] = true;
+  updates[`rooms/${code}/players/${user.uid}/totalTimeMs`] = ms;
+  updates[`rooms/${code}/results/${user.uid}`] = ms;
+
+  await update(ref(db), updates);
+}
+
+function listenRoom(code, cb) {
+  const roomRef = ref(db, `rooms/${code}`);
+  return onValue(roomRef, (snap) => cb(snap.val()));
+}
+
+// -------------------- APP --------------------
 export default function App() {
+  // Screens: "name" | "mode" | "teamChoice" | "join" | "lobby" | "game" | "results"
+  const [screen, setScreen] = useState("name");
+  const [name, setName] = useState("");
+  const [authUser, setAuthUser] = useState(null);
+
+  const [mode, setMode] = useState(null); // "solo" | "team"
+  const [roomCode, setRoomCode] = useState("");
+  const [joinCode, setJoinCode] = useState("");
+  const [roomData, setRoomData] = useState(null);
+  const unsubRef = useRef(null);
+
+  // TEAM game settings from room
+  const [roundSeed, setRoundSeed] = useState(null);
+  const [totalRounds, setTotalRounds] = useState(TOTAL_ROUNDS_DEFAULT);
+
+  // --- Your existing refs ---
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const cameraRef = useRef(null);
 
   const [ready, setReady] = useState(false);
   const [round, setRound] = useState(1);
-  const [target, setTarget] = useState(() => pickNextTarget());
+  const [target, setTarget] = useState(() => pickTargetForRound({ seed: 123, roundIndex: 1 })); // will reset properly
   const [finished, setFinished] = useState(false);
 
   const [mousePos, setMousePos] = useState({ x: 50, y: 50 });
-  const startAtRef = useRef(0);
-  const [timeText, setTimeText] = useState("0:00.000");
+
+  // Total time (sum of per-round durations) — what you asked for
+  const totalMsRef = useRef(0);
+  const roundStartRef = useRef(0);
   const startedRef = useRef(false);
+  const [timeText, setTimeText] = useState("0:00.000");
 
   // Avoid stale state inside handlers
   const targetRef = useRef(target);
@@ -98,43 +271,99 @@ export default function App() {
   useEffect(() => void (roundRef.current = round), [round]);
   useEffect(() => void (finishedRef.current = finished), [finished]);
 
-  // Stable-frame gate (works for single-hand + both-hands)
+  // Stable-frame gate
   const matchStableCountRef = useRef(0);
   const STABLE_FRAMES = 3;
 
-  const getElapsedMs = () => {
-    if (!startedRef.current) return 0;
-    return performance.now() - startAtRef.current;
-  };
+  // Keep auth user state
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (u) => {
+      setAuthUser(u);
+      if (u?.displayName) {
+        setName(u.displayName);
+        if (screen === "name") setScreen("mode");
+      }
+    });
+    return () => unsub();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const randomizeMousePos = () => {
-    // avoid bottom-right camera preview zone
+  // --- Target generator wrapper (solo = random, team = deterministic) ---
+  function getNextTarget(nextRound) {
+    if (mode === "team" && roundSeed != null) {
+      return pickTargetForRound({ seed: roundSeed, roundIndex: nextRound });
+    }
+    // SOLO: keep your old randomness style
+    // (use Math.random but still reuse deterministic functions for simplicity)
+    const rng = () => Math.random();
+    const r = rng();
+    if (r < 0.34) return GESTURE_TARGETS[Math.floor(rng() * GESTURE_TARGETS.length)];
+    if (r < 0.67) return generateKeyTargetFromRng(rng);
+    return { type: "MOUSE", display: "🎯", label: "CLICK THE TARGET" };
+  }
+
+  function getMousePosForTarget(nextRound) {
+    if (mode === "team" && roundSeed != null) {
+      const rng = mulberry32((roundSeed ^ (nextRound * 97531)) >>> 0);
+      return mousePosFromRng(rng);
+    }
+    // SOLO random
     const x = 10 + Math.random() * 60;
     const y = 15 + Math.random() * 55;
-    setMousePos({ x, y });
+    return { x, y };
+  }
+
+  const getDisplayedMs = () => {
+    if (!startedRef.current) return 0;
+    const now = performance.now();
+    return totalMsRef.current + (now - roundStartRef.current);
   };
 
-  const completeRound = () => {
+  // Complete round: add per-round time, advance, finish
+  const completeRound = async () => {
     if (finishedRef.current) return;
 
+    const now = performance.now();
     if (!startedRef.current) {
       startedRef.current = true;
-      startAtRef.current = performance.now();
+      roundStartRef.current = now;
+      totalMsRef.current = 0;
+    } else {
+      // close current round
+      totalMsRef.current += now - roundStartRef.current;
+      roundStartRef.current = now;
     }
 
-    if (roundRef.current >= TOTAL_ROUNDS) {
-      setTimeText(formatMs(getElapsedMs()));
+    // finish?
+    if (roundRef.current >= totalRounds) {
+      const finalMs = totalMsRef.current;
+      setTimeText(formatMs(finalMs));
       setFinished(true);
+
+      // TEAM: submit result
+      if (mode === "team" && roomCode) {
+        try {
+          await submitResult(roomCode, finalMs);
+          setScreen("results");
+        } catch (e) {
+          console.error(e);
+          setScreen("results"); // still show results screen
+        }
+      } else {
+        setScreen("results");
+      }
       return;
     }
 
-    setRound((r) => r + 1);
-    const next = pickNextTarget();
-    setTarget(next);
-    if (next.type === "MOUSE") randomizeMousePos();
-
-    // reset stability gate when new target appears
-    matchStableCountRef.current = 0;
+    // next round
+    setRound((r) => {
+      const nextR = r + 1;
+      const nextT = getNextTarget(nextR);
+      setTarget(nextT);
+      if (nextT.type === "MOUSE") setMousePos(getMousePosForTarget(nextR));
+      matchStableCountRef.current = 0;
+      return nextR;
+    });
   };
 
   const onMouseTargetClick = (e) => {
@@ -148,7 +377,7 @@ export default function App() {
   useEffect(() => {
     let raf = 0;
     const tick = () => {
-      if (!finishedRef.current && startedRef.current) setTimeText(formatMs(getElapsedMs()));
+      if (!finishedRef.current && startedRef.current) setTimeText(formatMs(getDisplayedMs()));
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -159,6 +388,7 @@ export default function App() {
   useEffect(() => {
     const onKeyDown = (e) => {
       if (finishedRef.current) return;
+      if (screen !== "game") return;
       if (e.repeat) return;
       if (!isAllowedKey(e.key)) return;
 
@@ -173,9 +403,9 @@ export default function App() {
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [screen]);
 
-  // MediaPipe Hands + draw preview onto canvas
+  // MediaPipe Hands + camera preview
   useEffect(() => {
     if (!videoRef.current) return;
 
@@ -193,7 +423,7 @@ export default function App() {
     hands.onResults((results) => {
       if (finishedRef.current) return;
 
-      // draw camera frame into canvas
+      // draw camera frame
       const canvas = canvasRef.current;
       if (canvas && results.image) {
         const ctx = canvas.getContext("2d");
@@ -204,29 +434,27 @@ export default function App() {
         ctx.drawImage(results.image, 0, 0, w, h);
       }
 
+      if (screen !== "game") return;
+
       const t = targetRef.current;
       if (!t || t.type !== "GESTURE") return;
 
       const landmarks = results?.multiHandLandmarks || [];
       const handedness = results?.multiHandedness || [];
 
-      // Build per-hand info
       const handsSeen = landmarks.map((lm, i) => {
-        const rawHand = handedness?.[i]?.label || null; // "Left" / "Right"
+        const rawHand = handedness?.[i]?.label || null;
         const seenHand = rawHand && MIRROR ? (rawHand === "Left" ? "Right" : "Left") : rawHand;
         const gesture = classifyGesture(lm);
         return { seenHand, gesture };
       });
 
-      // Evaluate match
       let matched = false;
 
       if (t.bothHands) {
-        // Need TWO hands doing the same gesture
         const valid = handsSeen.filter((h) => h.gesture);
         matched = valid.length === 2 && valid.every((h) => h.gesture === t.gesture);
       } else {
-        // Single hand: (optionally) must be specific hand
         matched = handsSeen.some((h) => {
           if (!h.gesture) return false;
           if (h.gesture !== t.gesture) return false;
@@ -235,7 +463,6 @@ export default function App() {
         });
       }
 
-      // Stability gate (3 frames)
       if (matched) matchStableCountRef.current += 1;
       else matchStableCountRef.current = 0;
 
@@ -257,27 +484,305 @@ export default function App() {
     setReady(true);
 
     return () => {
-      try {
-        cameraRef.current?.stop();
-      } catch {}
-      try {
-        hands.close();
-      } catch {}
+      try { cameraRef.current?.stop(); } catch {}
+      try { hands.close(); } catch {}
+    };
+  }, [screen]);
+
+  // TEAM: listen to room changes
+  function startListening(code) {
+    if (unsubRef.current) unsubRef.current();
+    unsubRef.current = listenRoom(code, (data) => {
+      setRoomData(data || null);
+
+      // when host starts
+      if (data?.status === "playing") {
+        setMode("team");
+        setRoundSeed(data.roundSeed);
+        setTotalRounds(data.roundCount || TOTAL_ROUNDS_DEFAULT);
+
+        // reset game for team start
+        resetGame({ seed: data.roundSeed, rounds: data.roundCount || TOTAL_ROUNDS_DEFAULT });
+        setScreen("game");
+      }
+    });
+  }
+
+  useEffect(() => {
+    return () => {
+      if (unsubRef.current) unsubRef.current();
     };
   }, []);
 
-  const reset = () => {
+  // Reset game function
+  function resetGame({ seed = null, rounds = TOTAL_ROUNDS_DEFAULT } = {}) {
     setFinished(false);
+    setTotalRounds(rounds);
     setRound(1);
 
-    const next = pickNextTarget();
+    const next = seed != null ? pickTargetForRound({ seed, roundIndex: 1 }) : getNextTarget(1);
     setTarget(next);
-    if (next.type === "MOUSE") randomizeMousePos();
+    if (next.type === "MOUSE") setMousePos(seed != null ? getMousePosForTarget(1) : getMousePosForTarget(1));
 
     setTimeText("0:00.000");
     startedRef.current = false;
-
+    totalMsRef.current = 0;
+    roundStartRef.current = 0;
     matchStableCountRef.current = 0;
+  }
+
+  // ----- UI actions -----
+  async function handleNameContinue() {
+    try {
+      await signInWithName(name);
+      setScreen("mode");
+    } catch (e) {
+      alert(e.message || String(e));
+    }
+  }
+
+  function goSolo() {
+    setMode("solo");
+    setRoomCode("");
+    setRoomData(null);
+    setRoundSeed(null);
+    setTotalRounds(TOTAL_ROUNDS_DEFAULT);
+    resetGame({ seed: null, rounds: TOTAL_ROUNDS_DEFAULT });
+    setScreen("game");
+  }
+
+  function goTeam() {
+    setMode("team");
+    setScreen("teamChoice");
+  }
+
+  async function handleHostCreate() {
+    try {
+      const code = await createRoom(TOTAL_ROUNDS_DEFAULT);
+      setRoomCode(code);
+      startListening(code);
+      setScreen("lobby");
+    } catch (e) {
+      alert(e.message || String(e));
+    }
+  }
+
+  async function handleJoin() {
+    try {
+      const code = joinCode.trim().toUpperCase();
+      if (!code) return alert("Enter room code");
+      await joinRoom(code);
+      setRoomCode(code);
+      startListening(code);
+      setScreen("lobby");
+    } catch (e) {
+      alert(e.message || String(e));
+    }
+  }
+
+  async function handleHostStart() {
+    try {
+      await startGame(roomCode);
+    } catch (e) {
+      alert(e.message || String(e));
+    }
+  }
+
+  function handleBackHome() {
+    if (unsubRef.current) unsubRef.current();
+    unsubRef.current = null;
+
+    setRoomData(null);
+    setRoomCode("");
+    setJoinCode("");
+    setRoundSeed(null);
+    setMode(null);
+    setScreen("mode");
+  }
+
+  // ----- Leaderboard building -----
+  function buildLeaderboard() {
+    const results = roomData?.results || {};
+    const players = roomData?.players || {};
+    const rows = Object.entries(results).map(([uid, ms]) => ({
+      uid,
+      name: players?.[uid]?.name || "Player",
+      ms: typeof ms === "number" ? ms : Number(ms),
+    }));
+    rows.sort((a, b) => a.ms - b.ms);
+    return rows;
+  }
+
+  // ----- Screens -----
+  if (screen === "name") {
+    return (
+      <div className="minScreen" style={{ padding: 18 }}>
+        <h2>Oops Too Slow</h2>
+        <p>Enter your name (that’s all you need):</p>
+        <input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Your name"
+          style={{ padding: 10, fontSize: 16, width: 260 }}
+        />
+        <div style={{ height: 10 }} />
+        <button className="hudBtn" onClick={handleNameContinue}>
+          Continue
+        </button>
+        <div style={{ marginTop: 12, opacity: 0.7, fontSize: 12 }}>
+          You’ll be signed in anonymously (no email/password).
+        </div>
+      </div>
+    );
+  }
+
+  if (screen === "mode") {
+    return (
+      <div className="minScreen" style={{ padding: 18 }}>
+        <h2>Hi, {authUser?.displayName || name || "Player"} 👋</h2>
+        <p>Choose a mode:</p>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button className="hudBtn" onClick={goSolo}>Solo Mode</button>
+          <button className="hudBtn" onClick={goTeam}>Team Mode</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (screen === "teamChoice") {
+    return (
+      <div className="minScreen" style={{ padding: 18 }}>
+        <h2>Team Mode</h2>
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button className="hudBtn" onClick={handleHostCreate}>Host Game</button>
+          <button className="hudBtn" onClick={() => setScreen("join")}>Join Party</button>
+          <button className="hudBtn" onClick={handleBackHome}>Back</button>
+        </div>
+        <p style={{ marginTop: 12, opacity: 0.8 }}>
+          Party limit: <b>5 players</b>
+        </p>
+      </div>
+    );
+  }
+
+  if (screen === "join") {
+    return (
+      <div className="minScreen" style={{ padding: 18 }}>
+        <h2>Join Party</h2>
+        <input
+          value={joinCode}
+          onChange={(e) => setJoinCode(e.target.value)}
+          placeholder="Room code (e.g. AB12CD)"
+          style={{ padding: 10, fontSize: 16, width: 260, textTransform: "uppercase" }}
+        />
+        <div style={{ height: 10 }} />
+        <div style={{ display: "flex", gap: 10 }}>
+          <button className="hudBtn" onClick={handleJoin}>Join</button>
+          <button className="hudBtn" onClick={() => setScreen("teamChoice")}>Back</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (screen === "lobby") {
+    const players = roomData?.players ? Object.values(roomData.players) : [];
+    const isHost = roomData?.hostUid && auth.currentUser?.uid === roomData.hostUid;
+
+    return (
+      <div className="minScreen" style={{ padding: 18 }}>
+        <h2>Waiting Room</h2>
+        <div style={{ marginBottom: 8 }}>
+          Room Code: <b style={{ letterSpacing: 2 }}>{roomCode}</b>
+        </div>
+        <div style={{ opacity: 0.8, marginBottom: 12 }}>
+          Players ({players.length}/5):
+        </div>
+        <ul>
+          {players.map((p, i) => (
+            <li key={i}>{p.name}{p.finished ? " ✅" : ""}</li>
+          ))}
+        </ul>
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+          {isHost ? (
+            <button className="hudBtn" onClick={handleHostStart}>
+              Start Game
+            </button>
+          ) : (
+            <div style={{ opacity: 0.8 }}>Waiting for host to start…</div>
+          )}
+          <button className="hudBtn" onClick={handleBackHome}>Leave</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (screen === "results") {
+    const isTeam = mode === "team" && roomData;
+    const rows = isTeam ? buildLeaderboard() : [];
+
+    return (
+      <div className="minScreen" style={{ padding: 18 }}>
+        <h2>Results</h2>
+
+        {mode === "solo" && (
+          <>
+            <p>Your total time:</p>
+            <h3>{timeText}</h3>
+          </>
+        )}
+
+        {isTeam && (
+          <>
+            <p>Leaderboard (fastest wins):</p>
+            {rows.length === 0 ? (
+              <div style={{ opacity: 0.8 }}>No results yet…</div>
+            ) : (
+              <ol>
+                {rows.map((r) => (
+                  <li key={r.uid}>
+                    <b>{r.name}</b> — {formatMs(r.ms)}
+                  </li>
+                ))}
+              </ol>
+            )}
+          </>
+        )}
+
+        <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+          <button
+            className="hudBtn"
+            onClick={() => {
+              if (mode === "team") {
+                // In team mode, wait room still exists; go back to lobby
+                setFinished(false);
+                setScreen(roomCode ? "lobby" : "mode");
+              } else {
+                // Solo restart
+                goSolo();
+              }
+            }}
+          >
+            {mode === "team" ? "Back to Lobby" : "Play Again"}
+          </button>
+          <button className="hudBtn" onClick={handleBackHome}>Home</button>
+        </div>
+      </div>
+    );
+  }
+
+  // -------------- GAME SCREEN (your original UI, slightly adjusted) --------------
+  // Note: in TEAM mode, seed/roundCount is controlled by host start.
+  const TOTAL_ROUNDS = totalRounds;
+
+  const reset = () => {
+    if (mode === "team") {
+      // For team, don’t let people desync by random reset during a match.
+      // Just reset locally to round 1 with same seed.
+      resetGame({ seed: roundSeed, rounds: TOTAL_ROUNDS });
+    } else {
+      resetGame({ seed: null, rounds: TOTAL_ROUNDS_DEFAULT });
+    }
   };
 
   return (
@@ -285,6 +790,9 @@ export default function App() {
       <div className="hud">
         <div>{ready ? "CAM ON" : "CAM..."}</div>
         <div>
+          {mode === "team" ? (
+            <>ROOM: <b>{roomCode}</b> | </>
+          ) : null}
           ROUND: <b>{round}/{TOTAL_ROUNDS}</b> | TIME: <b>{timeText}</b>
         </div>
         <button className="hudBtn" onClick={reset}>Reset</button>
@@ -317,7 +825,7 @@ export default function App() {
   );
 }
 
-// Gesture classifier
+// Gesture classifier (unchanged)
 function classifyGesture(lm) {
   if (!lm) return null;
 
@@ -344,7 +852,6 @@ function classifyGesture(lm) {
   if (thumbUp && thumbAboveWrist && indexCurl && middleCurl && ringCurl && pinkyCurl) return "THUMBS_UP";
   if (extendedCount === 0 && !thumbUp) return "FIST";
 
-  // 🤘 Rocker: index + pinky extended, middle + ring curled
   if (indexExt && !middleExt && !ringExt && pinkyExt && middleCurl && ringCurl) return "ROCKER";
 
   return null;
