@@ -25,30 +25,108 @@ import { setPersistence, inMemoryPersistence } from "firebase/auth";
 import { onDisconnect } from "firebase/database";
 
 // --- Game constants ---
-const TOTAL_ROUNDS_DEFAULT = 20;
+const TOTAL_ROUNDS_DEFAULT = 5;
 const MIRROR = true;
 
 const GESTURE_TARGETS = [
-  { type: "GESTURE", display: "🤚", label: "LEFT PALM", gesture: "OPEN_PALM", hand: "Left" },
-  { type: "GESTURE", display: "✋", label: "RIGHT PALM", gesture: "OPEN_PALM", hand: "Right" },
+  {
+    type: "GESTURE",
+    display: "🤚",
+    label: "LEFT PALM",
+    gesture: "OPEN_PALM",
+    hand: "Left",
+  },
+  {
+    type: "GESTURE",
+    display: "✋",
+    label: "RIGHT PALM",
+    gesture: "OPEN_PALM",
+    hand: "Right",
+  },
 
-  { type: "GESTURE", display: "✊", label: "LEFT FIST", gesture: "FIST", hand: "Left" },
-  { type: "GESTURE", display: "✊", label: "RIGHT FIST", gesture: "FIST", hand: "Right" },
+  {
+    type: "GESTURE",
+    display: "✊",
+    label: "LEFT FIST",
+    gesture: "FIST",
+    hand: "Left",
+  },
+  {
+    type: "GESTURE",
+    display: "✊",
+    label: "RIGHT FIST",
+    gesture: "FIST",
+    hand: "Right",
+  },
 
-  { type: "GESTURE", display: "✌️", label: "LEFT PEACE", gesture: "PEACE", hand: "Left" },
-  { type: "GESTURE", display: "✌️", label: "RIGHT PEACE", gesture: "PEACE", hand: "Right" },
+  {
+    type: "GESTURE",
+    display: "✌️",
+    label: "LEFT PEACE",
+    gesture: "PEACE",
+    hand: "Left",
+  },
+  {
+    type: "GESTURE",
+    display: "✌️",
+    label: "RIGHT PEACE",
+    gesture: "PEACE",
+    hand: "Right",
+  },
 
-  { type: "GESTURE", display: "👍", label: "LEFT THUMBS UP", gesture: "THUMBS_UP", hand: "Left" },
-  { type: "GESTURE", display: "👍", label: "RIGHT THUMBS UP", gesture: "THUMBS_UP", hand: "Right" },
+  {
+    type: "GESTURE",
+    display: "👍",
+    label: "LEFT THUMBS UP",
+    gesture: "THUMBS_UP",
+    hand: "Left",
+  },
+  {
+    type: "GESTURE",
+    display: "👍",
+    label: "RIGHT THUMBS UP",
+    gesture: "THUMBS_UP",
+    hand: "Right",
+  },
 
   { type: "GESTURE", display: "🤘", label: "ROCK ON", gesture: "ROCKER" },
 
-  { type: "GESTURE", display: "🤘🤘", label: "BOTH HAND ROCK ON", gesture: "ROCKER", bothHands: true },
-  { type: "GESTURE", display: "✊✊", label: "BOTH HAND FIST", gesture: "FIST", bothHands: true },
-  { type: "GESTURE", display: "✌️✌️", label: "BOTH HAND PEACE", gesture: "PEACE", bothHands: true },
+  {
+    type: "GESTURE",
+    display: "🤘🤘",
+    label: "BOTH HAND ROCK ON",
+    gesture: "ROCKER",
+    bothHands: true,
+  },
+  {
+    type: "GESTURE",
+    display: "✊✊",
+    label: "BOTH HAND FIST",
+    gesture: "FIST",
+    bothHands: true,
+  },
+  {
+    type: "GESTURE",
+    display: "✌️✌️",
+    label: "BOTH HAND PEACE",
+    gesture: "PEACE",
+    bothHands: true,
+  },
 ];
 
-const EXCLUDED_KEYS = ["Meta", "Control", "Alt", "Shift", "Escape", "CapsLock", "Tab"];
+const BOTH_HAND_GESTURE_TARGETS = GESTURE_TARGETS.filter(
+  (g) => g.type === "GESTURE" && g.bothHands,
+);
+
+const EXCLUDED_KEYS = [
+  "Meta",
+  "Control",
+  "Alt",
+  "Shift",
+  "Escape",
+  "CapsLock",
+  "Tab",
+];
 function isAllowedKey(key) {
   if (EXCLUDED_KEYS.includes(key)) return false;
   if (typeof key === "string" && key.startsWith("F")) return false;
@@ -68,7 +146,7 @@ function formatMs(ms) {
 function mulberry32(seed) {
   let t = seed >>> 0;
   return function () {
-    t += 0x6D2B79F5;
+    t += 0x6d2b79f5;
     let x = Math.imul(t ^ (t >>> 15), 1 | t);
     x ^= x + Math.imul(x ^ (x >>> 7), 61 | x);
     return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
@@ -96,9 +174,15 @@ function mousePosFromRng(rng) {
   return { x, y };
 }
 
-function pickTargetForRound({ seed, roundIndex }) {
-  // Make result depend on BOTH seed and roundIndex (stable per round)
+function pickTargetForRound({ seed, roundIndex, totalRounds }) {
   const rng = mulberry32((seed ^ (roundIndex * 2654435761)) >>> 0);
+
+  // ✅ Force LAST round to be a both-hands gesture
+  if (roundIndex === totalRounds) {
+    return BOTH_HAND_GESTURE_TARGETS[
+      Math.floor(rng() * BOTH_HAND_GESTURE_TARGETS.length)
+    ];
+  }
 
   const r = rng();
   if (r < 0.34) {
@@ -114,13 +198,15 @@ async function signInWithName(name) {
   if (!trimmed) throw new Error("Please enter a name");
 
   const cred = await signInAnonymously(auth);
+  await updateProfile(cred.user, { displayName: trimmed });
   return cred.user;
 }
 
 function makeRoomCode(len = 6) {
   const chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789";
   let out = "";
-  for (let i = 0; i < len; i++) out += chars[Math.floor(Math.random() * chars.length)];
+  for (let i = 0; i < len; i++)
+    out += chars[Math.floor(Math.random() * chars.length)];
   return out;
 }
 
@@ -156,44 +242,28 @@ async function createRoom(roundCount = TOTAL_ROUNDS_DEFAULT) {
       },
     });
 
-  onDisconnect(ref(db, `rooms/${code}/players/${uid}`)).remove();
-  onDisconnect(ref(db, `rooms/${code}/results/${uid}`)).remove();
+    const uid = user.uid;
+    onDisconnect(ref(db, `rooms/${code}/players/${uid}`)).remove();
+    onDisconnect(ref(db, `rooms/${code}/results/${uid}`)).remove();
 
     return code;
   }
   throw new Error("Failed to create room. Try again.");
 }
 
-async function joinRoom(code) {
+async function joinRoom(code, playerName) {
   const user = auth.currentUser;
   if (!user) throw new Error("Not signed in");
 
-  const roomRef = ref(db, `rooms/${code}`);
-  const roomSnap = await get(roomRef);
-  if (!roomSnap.exists()) throw new Error("Room not found");
-
-  const room = roomSnap.val();
-  if (room.status !== "lobby") throw new Error("Game already started");
-
-  // rejoin without consuming slot
-  if (room.players && room.players[user.uid]) return true;
-
-  // max 5 enforcement
-  const countRef = ref(db, `rooms/${code}/playerCount`);
-  const tx = await runTransaction(countRef, (cur) => {
-    const n = typeof cur === "number" ? cur : 0;
-    if (n >= 5) return; // abort
-    return n + 1;
-  });
-  if (!tx.committed) throw new Error("Room full (max 5)");
-
+  // ...
   await update(ref(db, `rooms/${code}/players/${user.uid}`), {
-    name: name.trim() || "Player",
+    name: (playerName || user.displayName || "Player").trim(),
     joinedAt: serverTimestamp(),
     finished: false,
     totalTimeMs: null,
   });
 
+  const uid = user.uid;
   onDisconnect(ref(db, `rooms/${code}/players/${uid}`)).remove();
   onDisconnect(ref(db, `rooms/${code}/results/${uid}`)).remove();
 
@@ -236,7 +306,7 @@ function listenRoom(code, cb) {
 // -------------------- APP --------------------
 export default function App() {
   useEffect(() => {
-  setPersistence(auth, inMemoryPersistence).catch(console.error);
+    setPersistence(auth, inMemoryPersistence).catch(console.error);
   }, []);
 
   // Screens: "name" | "mode" | "teamChoice" | "join" | "lobby" | "game" | "results"
@@ -259,9 +329,17 @@ export default function App() {
   const canvasRef = useRef(null);
   const cameraRef = useRef(null);
 
+  const [selfieUrl, setSelfieUrl] = useState(null);
+
   const [ready, setReady] = useState(false);
   const [round, setRound] = useState(1);
-  const [target, setTarget] = useState(() => pickTargetForRound({ seed: 123, roundIndex: 1 })); // will reset properly
+  const [target, setTarget] = useState(() =>
+    pickTargetForRound({
+      seed: 123,
+      roundIndex: 1,
+      totalRounds: TOTAL_ROUNDS_DEFAULT,
+    }),
+  );
   const [finished, setFinished] = useState(false);
 
   const [mousePos, setMousePos] = useState({ x: 50, y: 50 });
@@ -298,14 +376,28 @@ export default function App() {
 
   // --- Target generator wrapper (solo = random, team = deterministic) ---
   function getNextTarget(nextRound) {
+    // ✅ last round forced (solo + team)
+    const isLast = nextRound === totalRounds;
+
     if (mode === "team" && roundSeed != null) {
-      return pickTargetForRound({ seed: roundSeed, roundIndex: nextRound });
+      return pickTargetForRound({
+        seed: roundSeed,
+        roundIndex: nextRound,
+        totalRounds,
+      });
     }
-    // SOLO: keep your old randomness style
-    // (use Math.random but still reuse deterministic functions for simplicity)
+
+    // SOLO
+    if (isLast) {
+      return BOTH_HAND_GESTURE_TARGETS[
+        Math.floor(Math.random() * BOTH_HAND_GESTURE_TARGETS.length)
+      ];
+    }
+
     const rng = () => Math.random();
     const r = rng();
-    if (r < 0.34) return GESTURE_TARGETS[Math.floor(rng() * GESTURE_TARGETS.length)];
+    if (r < 0.34)
+      return GESTURE_TARGETS[Math.floor(rng() * GESTURE_TARGETS.length)];
     if (r < 0.67) return generateKeyTargetFromRng(rng);
     return { type: "MOUSE", display: "🎯", label: "CLICK THE TARGET" };
   }
@@ -348,6 +440,9 @@ export default function App() {
       setTimeText(formatMs(finalMs));
       setFinished(true);
 
+      const shot = captureSelfie();
+      if (shot) setSelfieUrl(shot);
+
       // TEAM: submit result
       if (mode === "team" && roomCode) {
         try {
@@ -385,7 +480,8 @@ export default function App() {
   useEffect(() => {
     let raf = 0;
     const tick = () => {
-      if (!finishedRef.current && startedRef.current) setTimeText(formatMs(getDisplayedMs()));
+      if (!finishedRef.current && startedRef.current)
+        setTimeText(formatMs(getDisplayedMs()));
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -418,7 +514,8 @@ export default function App() {
     if (!videoRef.current) return;
 
     const hands = new Hands({
-      locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
+      locateFile: (file) =>
+        `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`,
     });
 
     hands.setOptions({
@@ -452,7 +549,8 @@ export default function App() {
 
       const handsSeen = landmarks.map((lm, i) => {
         const rawHand = handedness?.[i]?.label || null;
-        const seenHand = rawHand && MIRROR ? (rawHand === "Left" ? "Right" : "Left") : rawHand;
+        const seenHand =
+          rawHand && MIRROR ? (rawHand === "Left" ? "Right" : "Left") : rawHand;
         const gesture = classifyGesture(lm);
         return { seenHand, gesture };
       });
@@ -461,7 +559,8 @@ export default function App() {
 
       if (t.bothHands) {
         const valid = handsSeen.filter((h) => h.gesture);
-        matched = valid.length === 2 && valid.every((h) => h.gesture === t.gesture);
+        matched =
+          valid.length === 2 && valid.every((h) => h.gesture === t.gesture);
       } else {
         matched = handsSeen.some((h) => {
           if (!h.gesture) return false;
@@ -492,8 +591,12 @@ export default function App() {
     setReady(true);
 
     return () => {
-      try { cameraRef.current?.stop(); } catch {}
-      try { hands.close(); } catch {}
+      try {
+        cameraRef.current?.stop();
+      } catch {}
+      try {
+        hands.close();
+      } catch {}
     };
   }, [screen]);
 
@@ -520,10 +623,12 @@ export default function App() {
         setRoundSeed(data.roundSeed);
         setTotalRounds(data.roundCount || TOTAL_ROUNDS_DEFAULT);
 
-        resetGame({ seed: data.roundSeed, rounds: data.roundCount || TOTAL_ROUNDS_DEFAULT });
+        resetGame({
+          seed: data.roundSeed,
+          rounds: data.roundCount || TOTAL_ROUNDS_DEFAULT,
+        });
         setScreen("game");
       }
-
     });
   }
 
@@ -539,9 +644,13 @@ export default function App() {
     setTotalRounds(rounds);
     setRound(1);
 
-    const next = seed != null ? pickTargetForRound({ seed, roundIndex: 1 }) : getNextTarget(1);
+    const next =
+      seed != null
+        ? pickTargetForRound({ seed, roundIndex: 1, totalRounds: rounds })
+        : getNextTarget(1);
+
     setTarget(next);
-    if (next.type === "MOUSE") setMousePos(seed != null ? getMousePosForTarget(1) : getMousePosForTarget(1));
+    if (next.type === "MOUSE") setMousePos(getMousePosForTarget(1));
 
     setTimeText("0:00.000");
     startedRef.current = false;
@@ -590,7 +699,7 @@ export default function App() {
     try {
       const code = joinCode.trim().toUpperCase();
       if (!code) return alert("Enter room code");
-      await joinRoom(code);
+      await joinRoom(code, name);
       setRoomCode(code);
       startListening(code);
       setScreen("lobby");
@@ -617,6 +726,7 @@ export default function App() {
     setRoundSeed(null);
     setMode(null);
     setScreen("mode");
+    setSelfieUrl(null);
   }
 
   // ----- Leaderboard building -----
@@ -661,8 +771,12 @@ export default function App() {
         <h2>Hi, {authUser?.displayName || name || "Player"} 👋</h2>
         <p>Choose a mode:</p>
         <div style={{ display: "flex", gap: 10 }}>
-          <button className="hudBtn" onClick={goSolo}>Solo Mode</button>
-          <button className="hudBtn" onClick={goTeam}>Team Mode</button>
+          <button className="hudBtn" onClick={goSolo}>
+            Solo Mode
+          </button>
+          <button className="hudBtn" onClick={goTeam}>
+            Team Mode
+          </button>
         </div>
       </div>
     );
@@ -673,9 +787,15 @@ export default function App() {
       <div className="minScreen" style={{ padding: 18 }}>
         <h2>Team Mode</h2>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <button className="hudBtn" onClick={handleHostCreate}>Host Game</button>
-          <button className="hudBtn" onClick={() => setScreen("join")}>Join Party</button>
-          <button className="hudBtn" onClick={handleBackHome}>Back</button>
+          <button className="hudBtn" onClick={handleHostCreate}>
+            Host Game
+          </button>
+          <button className="hudBtn" onClick={() => setScreen("join")}>
+            Join Party
+          </button>
+          <button className="hudBtn" onClick={handleBackHome}>
+            Back
+          </button>
         </div>
         <p style={{ marginTop: 12, opacity: 0.8 }}>
           Party limit: <b>5 players</b>
@@ -692,12 +812,21 @@ export default function App() {
           value={joinCode}
           onChange={(e) => setJoinCode(e.target.value)}
           placeholder="Room code (e.g. AB12CD)"
-          style={{ padding: 10, fontSize: 16, width: 260, textTransform: "uppercase" }}
+          style={{
+            padding: 10,
+            fontSize: 16,
+            width: 260,
+            textTransform: "uppercase",
+          }}
         />
         <div style={{ height: 10 }} />
         <div style={{ display: "flex", gap: 10 }}>
-          <button className="hudBtn" onClick={handleJoin}>Join</button>
-          <button className="hudBtn" onClick={() => setScreen("teamChoice")}>Back</button>
+          <button className="hudBtn" onClick={handleJoin}>
+            Join
+          </button>
+          <button className="hudBtn" onClick={() => setScreen("teamChoice")}>
+            Back
+          </button>
         </div>
       </div>
     );
@@ -705,7 +834,8 @@ export default function App() {
 
   if (screen === "lobby") {
     const players = roomData?.players ? Object.values(roomData.players) : [];
-    const isHost = roomData?.hostUid && auth.currentUser?.uid === roomData.hostUid;
+    const isHost =
+      roomData?.hostUid && auth.currentUser?.uid === roomData.hostUid;
 
     return (
       <div className="minScreen" style={{ padding: 18 }}>
@@ -718,11 +848,16 @@ export default function App() {
         </div>
         <ul>
           {players.map((p, i) => (
-            <li key={i}>{p.name}{p.finished ? " ✅" : ""}</li>
+            <li key={i}>
+              {p.name}
+              {p.finished ? " ✅" : ""}
+            </li>
           ))}
         </ul>
 
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}>
+        <div
+          style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 }}
+        >
           {isHost ? (
             <button className="hudBtn" onClick={handleHostStart}>
               Start Game
@@ -730,7 +865,9 @@ export default function App() {
           ) : (
             <div style={{ opacity: 0.8 }}>Waiting for host to start…</div>
           )}
-          <button className="hudBtn" onClick={handleBackHome}>Leave</button>
+          <button className="hudBtn" onClick={handleBackHome}>
+            Leave
+          </button>
         </div>
       </div>
     );
@@ -768,7 +905,49 @@ export default function App() {
           </>
         )}
 
-        <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
+        {selfieUrl && (
+          <div style={{ marginTop: 12 }}>
+            <p>Your selfie (last frame):</p>
+            <img
+              src={selfieUrl}
+              alt="Selfie"
+              style={{
+                width: 260,
+                borderRadius: 12,
+                border: "1px solid rgba(255,255,255,0.15)",
+              }}
+            />
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                marginTop: 10,
+                flexWrap: "wrap",
+              }}
+            >
+              <a
+                className="hudBtn"
+                href={selfieUrl}
+                download={`oops-too-slow-selfie.png`}
+              >
+                Download Selfie
+              </a>
+              <button
+                className="hudBtn"
+                onClick={() => {
+                  const shot = captureSelfie();
+                  if (shot) setSelfieUrl(shot);
+                }}
+              >
+                Retake Selfie
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div
+          style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}
+        >
           <button
             className="hudBtn"
             onClick={() => {
@@ -784,7 +963,9 @@ export default function App() {
           >
             {mode === "team" ? "Back to Lobby" : "Play Again"}
           </button>
-          <button className="hudBtn" onClick={handleBackHome}>Home</button>
+          <button className="hudBtn" onClick={handleBackHome}>
+            Home
+          </button>
         </div>
       </div>
     );
@@ -804,21 +985,45 @@ export default function App() {
     }
   };
 
+  function captureSelfie() {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    try {
+      return canvas.toDataURL("image/png");
+    } catch {
+      return null;
+    }
+  }
+
   return (
     <div className="minScreen">
       <div className="hud">
         <div>{ready ? "CAM ON" : "CAM..."}</div>
         <div>
           {mode === "team" ? (
-            <>ROOM: <b>{roomCode}</b> | </>
+            <>
+              ROOM: <b>{roomCode}</b> |{" "}
+            </>
           ) : null}
-          ROUND: <b>{round}/{TOTAL_ROUNDS}</b> | TIME: <b>{timeText}</b>
+          ROUND:{" "}
+          <b>
+            {round}/{TOTAL_ROUNDS}
+          </b>{" "}
+          | TIME: <b>{timeText}</b>
         </div>
-        <button className="hudBtn" onClick={reset}>Reset</button>
+        <button className="hudBtn" onClick={reset}>
+          Reset
+        </button>
       </div>
 
       {/* input only (hidden) */}
-      <video ref={videoRef} className="hiddenVideo" autoPlay playsInline muted />
+      <video
+        ref={videoRef}
+        className="hiddenVideo"
+        autoPlay
+        playsInline
+        muted
+      />
 
       <div className="centerWrap">
         {(target.type === "KEY" || target.type === "GESTURE") && (
@@ -848,7 +1053,8 @@ export default function App() {
 function classifyGesture(lm) {
   if (!lm) return null;
 
-  const fingerExtended = (mcp, pip, tip) => lm[tip].y < lm[pip].y && lm[pip].y < lm[mcp].y;
+  const fingerExtended = (mcp, pip, tip) =>
+    lm[tip].y < lm[pip].y && lm[pip].y < lm[mcp].y;
   const fingerCurled = (pip, tip) => lm[tip].y > lm[pip].y;
 
   const indexExt = fingerExtended(5, 6, 8);
@@ -861,17 +1067,28 @@ function classifyGesture(lm) {
   const ringCurl = fingerCurled(14, 16);
   const pinkyCurl = fingerCurled(18, 20);
 
-  const extendedCount = [indexExt, middleExt, ringExt, pinkyExt].filter(Boolean).length;
+  const extendedCount = [indexExt, middleExt, ringExt, pinkyExt].filter(
+    Boolean,
+  ).length;
 
   const thumbUp = lm[4].y < lm[3].y && lm[3].y < lm[2].y;
   const thumbAboveWrist = lm[4].y < lm[0].y;
 
   if (extendedCount === 4) return "OPEN_PALM";
   if (indexExt && middleExt && !ringExt && !pinkyExt) return "PEACE";
-  if (thumbUp && thumbAboveWrist && indexCurl && middleCurl && ringCurl && pinkyCurl) return "THUMBS_UP";
+  if (
+    thumbUp &&
+    thumbAboveWrist &&
+    indexCurl &&
+    middleCurl &&
+    ringCurl &&
+    pinkyCurl
+  )
+    return "THUMBS_UP";
   if (extendedCount === 0 && !thumbUp) return "FIST";
 
-  if (indexExt && !middleExt && !ringExt && pinkyExt && middleCurl && ringCurl) return "ROCKER";
+  if (indexExt && !middleExt && !ringExt && pinkyExt && middleCurl && ringCurl)
+    return "ROCKER";
 
   return null;
 }
