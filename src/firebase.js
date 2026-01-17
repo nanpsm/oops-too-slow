@@ -12,6 +12,7 @@ import {
   serverTimestamp,
 } from "firebase/database";
 
+
 // 1) Firebase config (yours)
 const firebaseConfig = {
   apiKey: "AIzaSyBAe7YjawmZEk8t1HLeAt6DZoB2DRwv7-w",
@@ -45,9 +46,11 @@ function makeRoomCode(len = 6) {
   return out;
 }
 
-export async function createRoom({ roundCount = 50 } = {}) {
+async function createRoom(roundCount = TOTAL_ROUNDS_DEFAULT, playerName = "Host") {
   const user = auth.currentUser;
   if (!user) throw new Error("Not signed in");
+
+  const safeName = (playerName || "").trim() || "Host";
 
   for (let tries = 0; tries < 5; tries++) {
     const code = makeRoomCode(6);
@@ -69,7 +72,7 @@ export async function createRoom({ roundCount = 50 } = {}) {
       startedAt: null,
       players: {
         [user.uid]: {
-          name: user.displayName || "Host",
+          name: safeName,
           joinedAt: serverTimestamp(),
           finished: false,
           totalTimeMs: null,
@@ -77,15 +80,21 @@ export async function createRoom({ roundCount = 50 } = {}) {
       },
     });
 
+    // onDisconnect cleanup (FIXED uid)
+    onDisconnect(ref(db, `rooms/${code}/players/${user.uid}`)).remove();
+    onDisconnect(ref(db, `rooms/${code}/results/${user.uid}`)).remove();
+
     return code;
   }
-
   throw new Error("Failed to create room. Try again.");
 }
 
-export async function joinRoom(code) {
+
+async function joinRoom(code, playerName = "Player") {
   const user = auth.currentUser;
   if (!user) throw new Error("Not signed in");
+
+  const safeName = (playerName || "").trim() || "Player";
 
   const roomRef = ref(db, `rooms/${code}`);
   const roomSnap = await get(roomRef);
@@ -94,25 +103,32 @@ export async function joinRoom(code) {
   const room = roomSnap.val();
   if (room.status !== "lobby") throw new Error("Game already started");
 
-  // allow rejoin without consuming a slot
-  if (room.players && room.players[user.uid]) return true;
+  // rejoin without consuming slot
+  if (room.players && room.players[user.uid]) {
+    // still register cleanup
+    onDisconnect(ref(db, `rooms/${code}/players/${user.uid}`)).remove();
+    onDisconnect(ref(db, `rooms/${code}/results/${user.uid}`)).remove();
+    return true;
+  }
 
-  // enforce max 5 with transaction
+
   const countRef = ref(db, `rooms/${code}/playerCount`);
   const tx = await runTransaction(countRef, (cur) => {
     const n = typeof cur === "number" ? cur : 0;
     if (n >= 5) return; // abort
     return n + 1;
   });
-
-  if (!tx.committed) throw new Error("Room full (max 5 players)");
+  if (!tx.committed) throw new Error("Room full (max 5)");
 
   await update(ref(db, `rooms/${code}/players/${user.uid}`), {
-    name: name.trim() || "Player",
+    name: safeName,
     joinedAt: serverTimestamp(),
     finished: false,
     totalTimeMs: null,
   });
+
+  onDisconnect(ref(db, `rooms/${code}/players/${user.uid}`)).remove();
+  onDisconnect(ref(db, `rooms/${code}/results/${user.uid}`)).remove();
 
   return true;
 }
