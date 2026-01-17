@@ -296,7 +296,7 @@ export default function App() {
   const startedRef = useRef(false);
   const lastRoomStatusRef = useRef(null);
   const startedAtRef = useRef(null); // prevents reset on every update
-  const [timeText, setTimeText] = useState("0:00.00");
+  const [timeText, setTimeText] = useState("0:00.000");
 
   // Avoid stale state inside handlers
   const targetRef = useRef(target);
@@ -687,23 +687,27 @@ export default function App() {
 
   if (screen === "name") {
     return (
-      <div className="minScreen" style={{ padding: 18 }}>
-        <h2>Oops! Too Slow</h2>
-        <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => {
-          if (e.key === "Enter") {
-            handleNameContinue();
-          }
-        }}
-          placeholder="Enter Your Nickname"
-          style={{ padding: 10, fontSize: 16, width: 260 }}
-        />
-        <div style={{ height: 10 }} />
-        <button className="hudBtn" onClick={handleNameContinue}>
-          Continue
-        </button>
+      <div className="minScreen nameScreen">
+        <div className="nameCard">
+          <h1 className="title">Oops Too Slow</h1>
+
+          <div className="nameRow">
+            <input
+              className="nameInput"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                handleNameContinue();
+              }
+            }}
+              placeholder="Enter Your Nickname"
+            />
+            <button className="enterBtn" onClick={handleNameContinue}>
+              Enter
+            </button>
+            </div>
+          </div>
       </div>
     );
   }
@@ -930,13 +934,23 @@ export default function App() {
   return (
     <div className="minScreen">
       <div className="hud">
-        <div>{ready ? "CAM ON" : "CAM..."}</div>
-        <div>
-          {mode === "team" ? (
-            <>ROOM: <b>{roomCode}</b> | </>
-          ) : null}
-          ROUND: <b>{round}/{TOTAL_ROUNDS}</b> | TIME: <b>{timeText}</b>
+        <div className="hudLeft">
+          ROUND:{" "}
+          <b>
+            {round}/{TOTAL_ROUNDS}
+          </b>
         </div>
+
+          <div className="hudCenter">
+            {mode === "team" ? (
+              <>
+                ROOM: <b>{roomCode}</b> | TIME: <b>{timeText}</b>
+              </>
+            ) : (
+              <b>{timeText}</b>
+            )}
+          </div>
+
         <button className="hudBtn" onClick={handleBackHome}>Home</button>
       </div>
 
