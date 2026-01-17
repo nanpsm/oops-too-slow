@@ -1,6 +1,14 @@
 :root { font-family: ui-sans-serif, system-ui, Arial; }
 
-* { box-sizing: border-box; }
+* { 
+  box-sizing: border-box; 
+  caret-color: transparent;
+}
+
+input, textarea {
+  caret-color: auto;
+}
+
 body { margin: 0; background: #0b0b10; color: #fff; }
 
 .page { min-height: 100vh; display: flex; flex-direction: column; }

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Hands } from "@mediapipe/hands";
 import { Camera } from "@mediapipe/camera_utils";
+import confetti from "canvas-confetti";
 import "./styles.css";
 
 // --- Firebase (ALL in this file) ---
@@ -574,6 +575,39 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    if (screen !== "results") return;
+
+    // Big center burst
+    confetti({
+      particleCount: 120,
+      spread: 90,
+      startVelocity: 45,
+      origin: { x: 0.5, y: 0.45 },
+    });
+
+    // Falling paper-pollen effect
+    const duration = 1600;
+    const end = Date.now() + duration;
+
+    const frame = () => {
+      confetti({
+        particleCount: 6,
+        startVelocity: 25,
+        spread: 70,
+        ticks: 220,
+        origin: { x: Math.random(), y: 0 },
+      });
+
+      if (Date.now() < end) {
+        requestAnimationFrame(frame);
+      }
+    };
+
+    frame();
+  }, [screen]);
+
+
   // Reset game function
   function resetGame({ seed = null, rounds = TOTAL_ROUNDS_DEFAULT } = {}) {
     setFinished(false);
@@ -842,40 +876,65 @@ export default function App() {
   }
 
   if (screen === "results") {
-    const isTeam = mode === "team" && roomData;
-    const rows = isTeam ? buildLeaderboard() : [];
+  const isTeam = mode === "team" && roomData;
+  const rows = isTeam ? buildLeaderboard() : [];
+  const winner = rows.length > 0 ? rows[0] : null;
 
-    return (
-      <div className="minScreen" style={{ padding: 18 }}>
-        <h2>Results</h2>
+  const myUid = auth.currentUser?.uid;
+  const myRow = rows.find((r) => r.uid === myUid);
 
-        {mode === "solo" && (
-          <>
-            <p>Your total time:</p>
-            <h3>{timeText}</h3>
-          </>
-        )}
+  const myTimeText =
+    mode === "solo"
+      ? timeText
+      : myRow?.ms != null
+      ? formatMs(myRow.ms)
+      : timeText;
 
-        {isTeam && (
-          <>
-            <p>Leaderboard (fastest wins):</p>
-            {rows.length === 0 ? (
-              <div style={{ opacity: 0.8 }}>No results yet…</div>
-            ) : (
-              <ol>
-                {rows.map((r) => (
-                  <li key={r.uid}>
-                    <b>{r.name}</b> — {formatMs(r.ms)}
-                  </li>
-                ))}
-              </ol>
-            )}
-          </>
-        )}
+  return (
+    <div className="minScreen" style={{ padding: 24 }}>
+      {/* ===== WINNER (big center) ===== */}
+      {isTeam && winner && (
+        <div style={{ textAlign: "center", marginBottom: 24 }}>
+          <div style={{ fontSize: 40, fontWeight: 900, marginTop: 6 }}>
+            🏆 Winner is {winner.name}
+          </div>
+          <div style={{ fontSize: 18, marginTop: 6 }}>
+            {winner.name}'s Record: {formatMs(winner.ms)}
+          </div>
+        </div>
+      )}
 
+      {/* ===== LEADERBOARD ===== */}
+      {isTeam && (
+        <div style={{ maxWidth: 520, margin: "0 auto 28px" }}>
+          <div style={{ fontWeight: 800, marginBottom: 10 }}>Ranking</div>
+          {rows.length === 0 ? (
+            <div style={{ opacity: 0.8 }}>No results yet…</div>
+          ) : (
+            <ol style={{ paddingLeft: 22 }}>
+              {rows.map((r, i) => (
+                <li
+                  key={r.uid}
+                  style={{
+                    marginBottom: 8,
+                    fontWeight: r.uid === myUid ? 800 : 400,
+                  }}
+                >
+                  {r.name} — {formatMs(r.ms)}
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      )}
+
+      {/* ===== YOUR RECORD ===== */}
+      <div style={{ maxWidth: 520, margin: "0 auto" }}>
+        <div style={{ fontWeight: 800, marginBottom: 10 }}>Your record - {myTimeText}</div>
+
+        {/* selfie + download (your existing working block) */}
         {selfieUrl && (
           <div style={{ marginTop: 12 }}>
-            <p>Your selfie (last frame):</p>
             <img
               src={selfieUrl}
               alt="Selfie"
@@ -883,48 +942,38 @@ export default function App() {
                 width: 260,
                 borderRadius: 12,
                 border: "1px solid rgba(255,255,255,0.15)",
+                display: "block",
+                marginBottom: 10,
               }}
             />
-            <div
-              style={{
-                display: "flex",
-                gap: 10,
-                marginTop: 10,
-                flexWrap: "wrap",
-              }}
+            <a
+              className="hudBtn"
+              href={selfieUrl}
+              download={`oops-too-slow-selfie.png`}
+              style={{ display: "inline-block" }}
             >
-              <a
-                className="hudBtn"
-                href={selfieUrl}
-                download={`oops-too-slow-selfie.png`}
-              >
-                Download Selfie
-              </a>
-            </div>
+              Save Image
+            </a>
           </div>
         )}
 
-        <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
-          <button
-            className="hudBtn"
-            onClick={() => {
-              if (mode === "team") {
-                // In team mode, wait room still exists; go back to lobby
-                setFinished(false);
-                setScreen(roomCode ? "lobby" : "mode");
-              } else {
-                // Solo restart
-                goSolo();
-              }
-            }}
-          >
-            {mode === "team" ? "Back to Lobby" : "Play Again"}
+
+        {/* buttons */}
+        <div style={{ display: "flex", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
+          {mode === "team" && (
+            <button className="hudBtn" onClick={() => setScreen("lobby")}>
+              Back to Lobby
+            </button>
+          )}
+          <button className="hudBtn" onClick={handleBackHome}>
+            Home
           </button>
-          <button className="hudBtn" onClick={handleBackHome}>Home</button>
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
+
 
   // -------------- GAME SCREEN (your original UI, slightly adjusted) --------------
   // Note: in TEAM mode, seed/roundCount is controlled by host start.
