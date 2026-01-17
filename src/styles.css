@@ -389,3 +389,21 @@ button.ghost { background: transparent; }
 
   box-shadow: 0 12px 30px rgba(0,0,0,0.12);
 }
+
+.mouseTarget {
+  position: absolute;
+
+  width: 64px;
+  height: 64px;
+
+  background: url("../assets/target.png") no-repeat center;
+  background-size: contain;
+
+  border: none;
+  outline: none;
+  padding: 0;
+
+  cursor: pointer;
+
+  transform: translate(-50%, -50%);
+}

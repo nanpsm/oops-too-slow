@@ -32,14 +32,14 @@ const MIRROR = true;
 const GESTURE_TARGETS = [
   {
     type: "GESTURE",
-    display: "🤚",
+    display: "✋",
     label: "LEFT PALM",
     gesture: "OPEN_PALM",
     hand: "Left",
   },
   {
     type: "GESTURE",
-    display: "✋",
+    display: "🤚",
     label: "RIGHT PALM",
     gesture: "OPEN_PALM",
     hand: "Right",
@@ -47,14 +47,14 @@ const GESTURE_TARGETS = [
 
   {
     type: "GESTURE",
-    display: "✊",
+    display: "🤛",
     label: "LEFT FIST",
     gesture: "FIST",
     hand: "Left",
   },
   {
     type: "GESTURE",
-    display: "✊",
+    display: "🤜",
     label: "RIGHT FIST",
     gesture: "FIST",
     hand: "Right",
@@ -90,26 +90,42 @@ const GESTURE_TARGETS = [
     hand: "Right",
   },
 
-  { type: "GESTURE", display: "🤘", label: "ROCK ON", gesture: "ROCKER" },
+  { type: "GESTURE", 
+    display: "🤘", 
+    label: "ROCK ON", 
+    gesture: "ROCKON" 
+  },
+  { type: "GESTURE", 
+    display: "☝️",
+    label: "LEFT INDEX", 
+    gesture: "LEFT_INDEX",
+    hand: "Left",
+  },
+  { type: "GESTURE", 
+    display: "☝️",
+    label: "RIGHT INDEX", 
+    gesture: "RIGHT_INDEX",
+    hand: "Right",
+  },
 
   {
     type: "GESTURE",
     display: "🤘🤘",
-    label: "BOTH HAND ROCK ON",
-    gesture: "ROCKER",
+    label: "DOUBLE ROCK ON",
+    gesture: "ROCKON",
     bothHands: true,
   },
   {
     type: "GESTURE",
-    display: "✊✊",
-    label: "BOTH HAND FIST",
+    display: "🤜🤛",
+    label: "DUAL FIST",
     gesture: "FIST",
     bothHands: true,
   },
   {
     type: "GESTURE",
     display: "✌️✌️",
-    label: "BOTH HAND PEACE",
+    label: "DOUBLE PEACE",
     gesture: "PEACE",
     bothHands: true,
   },
@@ -134,7 +150,7 @@ function isAllowedKey(key) {
   return true;
 }
 
-const FLOATING = ["✌️", "🤘", "👍", "O", "P", "S", "T", "L", "W"];
+const FLOATING = ["✌️", "🤘", "👍", "☝️", "O", "P", "S", "T", "L", "W"];
 
 function formatMs(ms) {
   const total = Math.max(0, Math.round(ms));
@@ -1099,10 +1115,12 @@ export default function App() {
         )}
 
         {/* ===== YOUR RECORD ===== */}
-        <div style={{ maxWidth: 520, margin: "0 auto" }}>
-          <div style={{ fontWeight: 800, marginBottom: 10 }}>
-            Your record - {myTimeText}
-          </div>
+
+        <div className="centerWrapScreen">
+          <div className="containerBox">
+            <div style={{ fontWeight: 900 }}>
+              Your record : {myTimeText}
+              </div>
 
           {/* selfie + download (your existing working block) */}
           {selfieUrl && (
@@ -1130,14 +1148,6 @@ export default function App() {
           )}
 
           {/* buttons */}
-          <div
-            style={{
-              display: "flex",
-              gap: 10,
-              marginTop: 16,
-              flexWrap: "wrap",
-            }}
-          >
             {mode === "team" && (
               <button className="hudBtn" onClick={() => setScreen("lobby")}>
                 Back to Lobby
@@ -1150,14 +1160,15 @@ export default function App() {
         </div>
       </div>
     );
-  }
+  } 
 
   // -------------- GAME SCREEN (your original UI, slightly adjusted) --------------
   // Note: in TEAM mode, seed/roundCount is controlled by host start.
   const TOTAL_ROUNDS = totalRounds;
 
   return (
-    <div className="minScreen">
+    <div className="minScreen"
+    style={{backgroundImage: 'url("../assets/bg.jpg")'}}>
       <div className="hud">
         <div className="hudLeft">
           ROUND:{" "}
@@ -1253,7 +1264,12 @@ function classifyGesture(lm) {
   if (extendedCount === 0 && !thumbUp) return "FIST";
 
   if (indexExt && !middleExt && !ringExt && pinkyExt && middleCurl && ringCurl)
-    return "ROCKER";
+    return "ROCKON";
+
+if (indexExt && !middleExt && !ringExt && !pinkyExt) {
+  if (seenHand === "Left") return "LEFT_INDEX";
+  if (seenHand === "Right") return "RIGHT_INDEX";
+}
 
   return null;
 }
