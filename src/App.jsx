@@ -5,24 +5,23 @@ import "./styles.css";
 
 // --- Firebase (ALL in this file) ---
 import {
-  getAuth,
   signInAnonymously,
-  updateProfile,
   onAuthStateChanged,
+  setPersistence,
+  inMemoryPersistence,
 } from "firebase/auth";
+
 import {
-  getDatabase,
   ref,
   get,
   set,
   update,
   onValue,
-  runTransaction,
   serverTimestamp,
+  onDisconnect,
 } from "firebase/database";
+
 import { auth, db } from "./firebase";
-import { setPersistence, inMemoryPersistence } from "firebase/auth";
-import { onDisconnect } from "firebase/database";
 
 // --- Game constants ---
 const TOTAL_ROUNDS_DEFAULT = 20;
@@ -48,6 +47,10 @@ const GESTURE_TARGETS = [
   { type: "GESTURE", display: "✌️✌️", label: "BOTH HAND PEACE", gesture: "PEACE", bothHands: true },
 ];
 
+const BOTH_HAND_GESTURE_TARGETS = GESTURE_TARGETS.filter(
+  (g) => g.type === "GESTURE" && g.bothHands,
+);
+
 const EXCLUDED_KEYS = ["Meta", "Control", "Alt", "Shift", "Escape", "CapsLock", "Tab"];
 function isAllowedKey(key) {
   if (EXCLUDED_KEYS.includes(key)) return false;
@@ -61,7 +64,7 @@ function formatMs(ms) {
   const m = Math.floor(sec / 60);
   const s = sec % 60;
   const msLeft = total % 1000;
-  return `${m}:${String(s).padStart(2, "0")}.${String(msLeft).padStart(3, "0")}`;
+  return `${m}:${String(s).padStart(2, "0")}.${String(msLeft).padStart(2, "0")}`;
 }
 
 // ---------- Deterministic RNG for TEAM mode (same targets for everyone) ----------
@@ -78,7 +81,7 @@ function mulberry32(seed) {
 function generateKeyTargetFromRng(rng) {
   const letters = "abcdefghijklmnopqrstuvwxyz";
   const numbers = "0123456789";
-  const symbols = "`-=[]\\;',./";
+  const symbols = "`=[]\\;',./";
   const all = (letters + numbers + symbols + " ").split("");
   const key = all[Math.floor(rng() * all.length)];
   return {
@@ -96,9 +99,14 @@ function mousePosFromRng(rng) {
   return { x, y };
 }
 
-function pickTargetForRound({ seed, roundIndex }) {
-  // Make result depend on BOTH seed and roundIndex (stable per round)
+function pickTargetForRound({ seed, roundIndex, totalRounds }) {
   const rng = mulberry32((seed ^ (roundIndex * 2654435761)) >>> 0);
+
+  if (roundIndex === totalRounds) {
+    return BOTH_HAND_GESTURE_TARGETS[
+      Math.floor(rng() * BOTH_HAND_GESTURE_TARGETS.length)
+    ];
+  }
 
   const r = rng();
   if (r < 0.34) {
@@ -272,6 +280,8 @@ export default function App() {
   const canvasRef = useRef(null);
   const cameraRef = useRef(null);
 
+  const [selfieUrl, setSelfieUrl] = useState(null);
+
   const [ready, setReady] = useState(false);
   const [round, setRound] = useState(1);
   const [target, setTarget] = useState(() => pickTargetForRound({ seed: 123, roundIndex: 1 })); // will reset properly
@@ -285,7 +295,7 @@ export default function App() {
   const startedRef = useRef(false);
   const lastRoomStatusRef = useRef(null);
   const startedAtRef = useRef(null); // prevents reset on every update
-  const [timeText, setTimeText] = useState("0:00.000");
+  const [timeText, setTimeText] = useState("0:00.00");
 
   // Avoid stale state inside handlers
   const targetRef = useRef(target);
@@ -311,14 +321,28 @@ export default function App() {
 
   // --- Target generator wrapper (solo = random, team = deterministic) ---
   function getNextTarget(nextRound) {
+    // ✅ last round forced (solo + team)
+    const isLast = nextRound === totalRounds;
+
     if (mode === "team" && roundSeed != null) {
-      return pickTargetForRound({ seed: roundSeed, roundIndex: nextRound });
+      return pickTargetForRound({
+        seed: roundSeed,
+        roundIndex: nextRound,
+        totalRounds,
+      });
     }
-    // SOLO: keep your old randomness style
-    // (use Math.random but still reuse deterministic functions for simplicity)
+
+    // SOLO
+    if (isLast) {
+      return BOTH_HAND_GESTURE_TARGETS[
+        Math.floor(Math.random() * BOTH_HAND_GESTURE_TARGETS.length)
+      ];
+    }
+
     const rng = () => Math.random();
     const r = rng();
-    if (r < 0.34) return GESTURE_TARGETS[Math.floor(rng() * GESTURE_TARGETS.length)];
+    if (r < 0.34)
+      return GESTURE_TARGETS[Math.floor(rng() * GESTURE_TARGETS.length)];
     if (r < 0.67) return generateKeyTargetFromRng(rng);
     return { type: "MOUSE", display: "🎯", label: "CLICK THE TARGET" };
   }
@@ -360,6 +384,9 @@ export default function App() {
       const finalMs = totalMsRef.current;
       setTimeText(formatMs(finalMs));
       setFinished(true);
+
+      const shot = captureSelfie();
+      if (shot) setSelfieUrl(shot);
 
       // TEAM: submit result
       if (mode === "team" && roomCode) {
@@ -546,23 +573,6 @@ export default function App() {
     };
   }, []);
 
-  // Reset game function
-  function resetGame({ seed = null, rounds = TOTAL_ROUNDS_DEFAULT } = {}) {
-    setFinished(false);
-    setTotalRounds(rounds);
-    setRound(1);
-
-    const next = seed != null ? pickTargetForRound({ seed, roundIndex: 1 }) : getNextTarget(1);
-    setTarget(next);
-    if (next.type === "MOUSE") setMousePos(seed != null ? getMousePosForTarget(1) : getMousePosForTarget(1));
-
-    setTimeText("0:00.000");
-    startedRef.current = false;
-    totalMsRef.current = 0;
-    roundStartRef.current = 0;
-    matchStableCountRef.current = 0;
-  }
-
   // ----- UI actions -----
   async function handleNameContinue() {
     try {
@@ -631,7 +641,19 @@ export default function App() {
     setRoundSeed(null);
     setMode(null);
     setScreen("mode");
+    setSelfieUrl(null);
   }
+
+  function captureSelfie() {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    try {
+      return canvas.toDataURL("image/png");
+    } catch {
+      return null;
+    }
+  }
+
 
   function buildLeaderboard() {
     const results = roomData?.results || {};
@@ -649,20 +671,16 @@ export default function App() {
     return (
       <div className="minScreen" style={{ padding: 18 }}>
         <h2>Oops! Too Slow</h2>
-        <p>Enter your nickname:</p>
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Your nickname"
+          placeholder="Enter Your Nickname"
           style={{ padding: 10, fontSize: 16, width: 260 }}
         />
         <div style={{ height: 10 }} />
         <button className="hudBtn" onClick={handleNameContinue}>
           Continue
         </button>
-        <div style={{ marginTop: 12, opacity: 0.7, fontSize: 12 }}>
-          You’ll be signed in anonymously (no email/password).
-        </div>
       </div>
     );
   }
@@ -828,6 +846,37 @@ export default function App() {
           </>
         )}
 
+        {selfieUrl && (
+          <div style={{ marginTop: 12 }}>
+            <p>Your selfie (last frame):</p>
+            <img
+              src={selfieUrl}
+              alt="Selfie"
+              style={{
+                width: 260,
+                borderRadius: 12,
+                border: "1px solid rgba(255,255,255,0.15)",
+              }}
+            />
+            <div
+              style={{
+                display: "flex",
+                gap: 10,
+                marginTop: 10,
+                flexWrap: "wrap",
+              }}
+            >
+              <a
+                className="hudBtn"
+                href={selfieUrl}
+                download={`oops-too-slow-selfie.png`}
+              >
+                Download Selfie
+              </a>
+            </div>
+          </div>
+        )}
+
         <div style={{ display: "flex", gap: 10, marginTop: 12, flexWrap: "wrap" }}>
           <button
             className="hudBtn"
@@ -854,15 +903,6 @@ export default function App() {
   // Note: in TEAM mode, seed/roundCount is controlled by host start.
   const TOTAL_ROUNDS = totalRounds;
 
-  const reset = () => {
-    if (mode === "team") {
-      // For team, don’t let people desync by random reset during a match.
-      // Just reset locally to round 1 with same seed.
-      resetGame({ seed: roundSeed, rounds: TOTAL_ROUNDS });
-    } else {
-      resetGame({ seed: null, rounds: TOTAL_ROUNDS_DEFAULT });
-    }
-  };
 
   return (
     <div className="minScreen">
@@ -874,7 +914,7 @@ export default function App() {
           ) : null}
           ROUND: <b>{round}/{TOTAL_ROUNDS}</b> | TIME: <b>{timeText}</b>
         </div>
-        <button className="hudBtn" onClick={reset}>Reset</button>
+        <button className="hudBtn" onClick={handleBackHome}>Home</button>
       </div>
 
       {/* input only (hidden) */}
