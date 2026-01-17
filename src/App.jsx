@@ -5,24 +5,23 @@ import "./styles.css";
 
 // --- Firebase (ALL in this file) ---
 import {
-  getAuth,
   signInAnonymously,
-  updateProfile,
   onAuthStateChanged,
+  setPersistence,
+  inMemoryPersistence,
 } from "firebase/auth";
+
 import {
-  getDatabase,
   ref,
   get,
   set,
   update,
   onValue,
-  runTransaction,
   serverTimestamp,
+  onDisconnect,
 } from "firebase/database";
+
 import { auth, db } from "./firebase";
-import { setPersistence, inMemoryPersistence } from "firebase/auth";
-import { onDisconnect } from "firebase/database";
 
 // --- Game constants ---
 const TOTAL_ROUNDS_DEFAULT = 20;
@@ -533,7 +532,6 @@ export default function App() {
         setRoundSeed(data.roundSeed);
         setTotalRounds(data.roundCount || TOTAL_ROUNDS_DEFAULT);
 
-        resetGame({ seed: data.roundSeed, rounds: data.roundCount || TOTAL_ROUNDS_DEFAULT });
         setScreen("game");
       }
 
@@ -545,23 +543,6 @@ export default function App() {
       if (unsubRef.current) unsubRef.current();
     };
   }, []);
-
-  // Reset game function
-  function resetGame({ seed = null, rounds = TOTAL_ROUNDS_DEFAULT } = {}) {
-    setFinished(false);
-    setTotalRounds(rounds);
-    setRound(1);
-
-    const next = seed != null ? pickTargetForRound({ seed, roundIndex: 1 }) : getNextTarget(1);
-    setTarget(next);
-    if (next.type === "MOUSE") setMousePos(seed != null ? getMousePosForTarget(1) : getMousePosForTarget(1));
-
-    setTimeText("0:00.000");
-    startedRef.current = false;
-    totalMsRef.current = 0;
-    roundStartRef.current = 0;
-    matchStableCountRef.current = 0;
-  }
 
   // ----- UI actions -----
   async function handleNameContinue() {
@@ -854,16 +835,6 @@ export default function App() {
   // Note: in TEAM mode, seed/roundCount is controlled by host start.
   const TOTAL_ROUNDS = totalRounds;
 
-  const reset = () => {
-    if (mode === "team") {
-      // For team, don’t let people desync by random reset during a match.
-      // Just reset locally to round 1 with same seed.
-      resetGame({ seed: roundSeed, rounds: TOTAL_ROUNDS });
-    } else {
-      resetGame({ seed: null, rounds: TOTAL_ROUNDS_DEFAULT });
-    }
-  };
-
   return (
     <div className="minScreen">
       <div className="hud">
@@ -874,7 +845,7 @@ export default function App() {
           ) : null}
           ROUND: <b>{round}/{TOTAL_ROUNDS}</b> | TIME: <b>{timeText}</b>
         </div>
-        <button className="hudBtn" onClick={reset}>Reset</button>
+        <button className="hudBtn" onClick={handleBackHome}>Home</button>
       </div>
 
       {/* input only (hidden) */}
