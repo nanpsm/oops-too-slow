@@ -691,6 +691,11 @@ export default function App() {
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            handleNameContinue();
+          }
+        }}
           placeholder="Enter Your Nickname"
           style={{ padding: 10, fontSize: 16, width: 260 }}
         />
