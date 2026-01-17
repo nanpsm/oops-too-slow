@@ -79,27 +79,42 @@ button.ghost { background: transparent; }
 .minScreen {
   width: 100vw;
   height: 100vh;
-  background: #0b0b10;
-  color: white;
   display: flex;
   flex-direction: column;
 }
+
 .hiddenVideo {
   position: fixed;
   width: 1px;
   height: 1px;
   opacity: 0;
-  pointer-events: none;
 }
+
 .hud {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
   padding: 14px 18px;
   border-bottom: 1px solid rgba(255,255,255,0.12);
   font-size: 14px;
 }
+
+/* LEFT */
+.hudLeft {
+  justify-self: start;
+  white-space: nowrap;
+}
+
+/* CENTER */
+.hudCenter {
+  justify-self: center;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* RIGHT */
 .hudBtn {
+  justify-self: end;
   border: 1px solid rgba(255,255,255,0.18);
   background: rgba(255,255,255,0.10);
   color: white;
@@ -107,16 +122,62 @@ button.ghost { background: transparent; }
   border-radius: 12px;
   cursor: pointer;
 }
-.center {
-  flex: 1;
-  display: grid;
-  place-items: center;
-  text-align: center;
-  padding: 24px;
+
+
+.centerWrap {
+  position: absolute;
+  inset: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  pointer-events: none; /* ✅ THIS FIXES IT */
 }
+
+
+
+
 .title { font-size: 14px; opacity: 0.75; letter-spacing: 2px; }
-.big { font-size: clamp(90px, 18vw, 220px); line-height: 1; margin: 10px 0; }
-.subtitle { font-size: 16px; opacity: 0.9; }
+.big {
+  font-size: clamp(80px, 14vw, 160px);
+  line-height: 1;
+  margin-bottom: 12px;
+  color: #ffffff;
+
+
+  /* 🔵 40% faded blue neon (letters) */
+  text-shadow:
+    0 0 4px rgba(60, 100, 255, 0.45),
+    0 0 12px rgba(60, 100, 255, 0.45),
+    0 0 24px rgba(60, 100, 255, 0.30),
+    0 0 40px rgba(60, 100, 255, 0.18);
+
+
+  /* 🔵 40% faded glow (emojis) */
+  filter:
+    drop-shadow(0 0 6px rgba(60, 100, 255, 0.45))
+    drop-shadow(0 0 14px rgba(60, 100, 255, 0.30))
+    drop-shadow(0 0 26px rgba(60, 100, 255, 0.18));
+}
+
+.targetBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+
+
+.subtitle {
+  text-align: center;
+  font-size: 16px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
 
 /* Aimlab target */
 .mouseTarget{
@@ -125,7 +186,8 @@ button.ghost { background: transparent; }
   height:60px;
   border-radius:999px;
   transform: translate(-50%, -50%);
-  cursor: crosshair;
+  pointer-events: auto;
+  cursor: pointer;
   z-index: 10;
 
   border: 3px solid rgba(255,255,255,0.9);
@@ -149,20 +211,76 @@ button.ghost { background: transparent; }
 
 .cameraPreview {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
+  right: 14px;
+  bottom: 14px;
 
-  width: 30vw;        /* 30% of screen */
-  max-width: 360px;
+  width: 140px;          /* ⬅️ smaller */
   aspect-ratio: 4 / 3;
 
-  border-radius: 14px;
+  border-radius: 12px;
   border: 1px solid rgba(255,255,255,0.18);
   background: black;
 
   z-index: 50;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.45);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.45);
 
-  transform: scaleX(-1);
+  transform: scaleX(-1); /* mirror camera */
 }
 
+/* -------- NAME SCREEN -------- */
+
+.nameScreen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+/* TITLE */
+.title {
+  font-size: 48px;
+  font-weight: 700;
+  margin-bottom: 12px;   
+  line-height: 1.1;      
+}
+.nameRow {
+  display: flex;
+  align-items: center;
+}
+
+/* INPUT */
+.nameInput {
+  width: 220px;        /* 🔽 shorter */
+  height: 44px;        /* 🔽 smaller */
+  padding: 0 14px;
+  font-size: 14px;
+
+  border: none;
+  outline: none;
+  border-radius: 12px 0 0 12px;
+}
+
+
+
+
+.nameInput:focus {
+  border-color: white;
+}
+
+.enterBtn {
+  width: 90px;         /* 🔽 shorter */
+  height: 44px;        /* 🔽 same height */
+  font-size: 14px;
+
+  background: rgba(255,255,255,0.12);
+  color: white;
+  border: 1px solid rgba(255,255,255,0.25);
+  border-left: none;
+  cursor: pointer;
+
+  border-radius: 0 12px 12px 0;
+}
+
+.enterBtn:hover {
+  background: rgba(255,255,255,0.22);
+}
