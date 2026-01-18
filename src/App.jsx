@@ -45,14 +45,14 @@ const GESTURE_TARGETS = [
 
   {
     type: "GESTURE",
-    display: "🤛",
+    display: "🤜",
     label: "LEFT FIST",
     gesture: "FIST",
     hand: "Left",
   },
   {
     type: "GESTURE",
-    display: "🤜",
+    display: "🤛",
     label: "RIGHT FIST",
     gesture: "FIST",
     hand: "Right",
