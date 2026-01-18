@@ -45,12 +45,14 @@ Oops Too Slow is a fast-paced reaction game built with React that challenges pla
 
 ## Tech Stack
 
-- React
+- React + Vite
 - JavaScript
-- CSS (custom UI)
+- CSS
+- MediaPipe 
 - Webcam API
-- Canvas
-- (Optional) Firebase for team rooms & leaderboard
+- Canvas API
+- Firebase
+
 
 ## Install dependencies
 ```bash
