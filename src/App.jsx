@@ -93,18 +93,6 @@ const GESTURE_TARGETS = [
     label: "ROCK ON", 
     gesture: "ROCKON" 
   },
-  { type: "GESTURE", 
-    display: "☝️",
-    label: "LEFT INDEX", 
-    gesture: "LEFT_INDEX",
-    hand: "Left",
-  },
-  { type: "GESTURE", 
-    display: "☝️",
-    label: "RIGHT INDEX", 
-    gesture: "RIGHT_INDEX",
-    hand: "Right",
-  },
 
   {
     type: "GESTURE",
@@ -1217,11 +1205,6 @@ function classifyGesture(lm) {
 
   if (indexExt && !middleExt && !ringExt && pinkyExt && middleCurl && ringCurl)
     return "ROCKON";
-
-if (indexExt && !middleExt && !ringExt && !pinkyExt) {
-  if (seenHand === "Left") return "LEFT_INDEX";
-  if (seenHand === "Right") return "RIGHT_INDEX";
-}
 
   return null;
 }
